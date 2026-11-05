@@ -1,5 +1,8 @@
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
 use egui::{Color32, Stroke, Ui};
 
+use crate::audio::{AudioSharedState, SnapshotTransition};
 use crate::i18n::tr;
 
 pub struct CueItem {
@@ -11,12 +14,16 @@ pub struct CueItem {
     pub fade_time_s: f32,
     pub midi_trigger: &'static str,
     pub active: bool,
+    pub target_faders: [f32; 5], // dB levels for the 5 channels
 }
 
 pub struct SnapshotManager {
     pub cues: Vec<CueItem>,
     pub current_cue_idx: usize,
     pub crossfade_progress: f32,
+    pub transition: SnapshotTransition,
+    pub audio_state: Option<Arc<AudioSharedState>>,
+    start_faders: [f32; 5],
 }
 
 impl Default for SnapshotManager {
@@ -32,6 +39,7 @@ impl Default for SnapshotManager {
                     fade_time_s: 2.0,
                     midi_trigger: "Note C1 (36)",
                     active: false,
+                    target_faders: [-60.0, -60.0, 0.0, -60.0, 0.0],
                 },
                 CueItem {
                     id: 2,
@@ -42,6 +50,7 @@ impl Default for SnapshotManager {
                     fade_time_s: 1.5,
                     midi_trigger: "Note D1 (38)",
                     active: true,
+                    target_faders: [1.5, -4.0, -12.0, -60.0, 0.0],
                 },
                 CueItem {
                     id: 3,
@@ -52,6 +61,7 @@ impl Default for SnapshotManager {
                     fade_time_s: 1.0,
                     midi_trigger: "Note E1 (40)",
                     active: false,
+                    target_faders: [0.0, 2.0, -18.0, -6.0, 0.0],
                 },
                 CueItem {
                     id: 4,
@@ -62,6 +72,7 @@ impl Default for SnapshotManager {
                     fade_time_s: 0.8,
                     midi_trigger: "Note F1 (41)",
                     active: false,
+                    target_faders: [2.0, -60.0, -14.0, 0.0, 0.0],
                 },
                 CueItem {
                     id: 5,
@@ -72,16 +83,44 @@ impl Default for SnapshotManager {
                     fade_time_s: 2.5,
                     midi_trigger: "Note G1 (43)",
                     active: false,
+                    target_faders: [1.0, 0.0, 0.0, 0.0, 0.0],
                 },
             ],
             current_cue_idx: 1,
             crossfade_progress: 1.0,
+            transition: SnapshotTransition::default(),
+            audio_state: None,
+            start_faders: [1.5, -4.0, -12.0, -60.0, 0.0],
         }
     }
 }
 
 impl SnapshotManager {
+    pub fn new(audio_state: Arc<AudioSharedState>) -> Self {
+        let mut s = Self::default();
+        s.audio_state = Some(audio_state);
+        s
+    }
+
     pub fn render(&mut self, ui: &mut Ui) {
+        // Update transition progress & smoothly interpolate real DSP faders
+        let p = self.transition.get_progress();
+        self.crossfade_progress = p;
+
+        if self.transition.is_fading {
+            if let Some(state) = &self.audio_state {
+                let target_faders = self.cues[self.current_cue_idx].target_faders;
+                for ch in 0..5 {
+                    let from = self.start_faders[ch];
+                    let to = target_faders[ch];
+                    // Smoothstep interpolation
+                    let smooth_p = p * p * (3.0 - 2.0 * p);
+                    let current = from + (to - from) * smooth_p;
+                    state.channel_faders[ch].store(current.to_bits(), Ordering::Relaxed);
+                }
+            }
+        }
+
         let avail_w = ui.available_width();
         let avail_h = ui.available_height().max(420.0);
 
@@ -248,12 +287,23 @@ impl SnapshotManager {
 
     fn set_active_cue(&mut self, idx: usize) {
         if idx < self.cues.len() {
+            // Snapshot current fader values before transitioning
+            if let Some(state) = &self.audio_state {
+                for ch in 0..5 {
+                    self.start_faders[ch] = f32::from_bits(state.channel_faders[ch].load(Ordering::Relaxed));
+                }
+            } else {
+                self.start_faders = self.cues[self.current_cue_idx].target_faders;
+            }
+
             for c in &mut self.cues {
                 c.active = false;
             }
             self.cues[idx].active = true;
+            let fade_time = self.cues[idx].fade_time_s;
+            self.transition.trigger_fade(self.current_cue_idx, idx, fade_time);
             self.current_cue_idx = idx;
-            self.crossfade_progress = 1.0;
+            self.crossfade_progress = 0.0;
         }
     }
 }

@@ -1,5 +1,8 @@
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
 use egui::{Align2, Color32, FontId, Pos2, Rect, Stroke, Ui, Vec2};
 
+use crate::audio::AudioSharedState;
 use crate::i18n::tr;
 
 pub const SOURCES_ZH: &[(&str, &str)] = &[
@@ -40,7 +43,7 @@ pub const DESTINATIONS_EN: &[(&str, &str)] = &[
 
 pub struct RoutingMatrix {
     pub connections: Vec<Vec<bool>>,
-    pub signal_levels: Vec<f32>,
+    pub audio_state: Option<Arc<AudioSharedState>>,
     pub direct_monitoring: bool,
 }
 
@@ -62,13 +65,31 @@ impl Default for RoutingMatrix {
 
         Self {
             connections,
-            signal_levels: vec![0.75, 0.42, 0.85, 0.58, 0.36, 0.18],
+            audio_state: None,
             direct_monitoring: true,
         }
     }
 }
 
 impl RoutingMatrix {
+    pub fn new(audio_state: Arc<AudioSharedState>) -> Self {
+        let mut s = Self::default();
+        s.audio_state = Some(audio_state);
+        s.sync_to_audio_engine();
+        s
+    }
+
+    pub fn sync_to_audio_engine(&self) {
+        if let Some(state) = &self.audio_state {
+            for r in 0..SOURCES_EN.len() {
+                for c in 0..DESTINATIONS_EN.len() {
+                    state.matrix_connections[r][c].store(self.connections[r][c], Ordering::Relaxed);
+                }
+            }
+            state.direct_asio_monitoring.store(self.direct_monitoring, Ordering::Relaxed);
+        }
+    }
+
     pub fn render(&mut self, ui: &mut Ui, time: f64) {
         let is_zh = crate::i18n::Language::current() == crate::i18n::Language::Chinese;
         let sources = if is_zh { SOURCES_ZH } else { SOURCES_EN };
@@ -98,9 +119,13 @@ impl RoutingMatrix {
                                 *cell = false;
                             }
                         }
+                        self.sync_to_audio_engine();
                     }
                     if ui.button(egui::RichText::new(tr("恢复默认预设", "Reset Default")).size(11.0)).clicked() {
+                        let audio_state = self.audio_state.clone();
                         *self = Self::default();
+                        self.audio_state = audio_state;
+                        self.sync_to_audio_engine();
                     }
                 });
             });
@@ -197,7 +222,11 @@ impl RoutingMatrix {
                                     Color32::from_rgb(18, 21, 27)
                                 };
 
-                                let level = (self.signal_levels[row_idx] + (time * 3.0 + (row_idx as f64) * 0.7).sin() as f32 * 0.14).clamp(0.04, 0.98);
+                                let level = if let Some(state) = &self.audio_state {
+                                    f32::from_bits(state.input_peaks[row_idx].load(Ordering::Relaxed))
+                                } else {
+                                    (0.5 + (time * 3.0 + (row_idx as f64) * 0.7).sin() as f32 * 0.14).clamp(0.04, 0.98)
+                                };
 
                                 ui.horizontal(|ui| {
                                     // 1. Source Channel Card
@@ -232,6 +261,9 @@ impl RoutingMatrix {
 
                                         if response.clicked() {
                                             self.connections[row_idx][col_idx] = !is_connected;
+                                            if let Some(state) = &self.audio_state {
+                                                state.matrix_connections[row_idx][col_idx].store(!is_connected, Ordering::Relaxed);
+                                            }
                                         }
 
                                         let center = rect.center();
@@ -397,7 +429,9 @@ impl RoutingMatrix {
                             ui.separator();
                             ui.add_space(8.0);
 
-                            ui.checkbox(&mut self.direct_monitoring, tr("启用硬件零延迟监听", "Direct ASIO Monitoring"));
+                            if ui.checkbox(&mut self.direct_monitoring, tr("启用硬件零延迟监听", "Direct ASIO Monitoring")).changed() {
+                                self.sync_to_audio_engine();
+                            }
                             ui.add_space(2.0);
                             ui.label(
                                 egui::RichText::new(tr("绕开 Windows 混音器，声卡原生超低延迟直通。", "Bypass OS mixer for true zero-latency monitoring."))
@@ -424,6 +458,7 @@ impl RoutingMatrix {
         self.connections[3][0] = true; // BGM -> Monitors
         self.connections[3][2] = true; // BGM -> OBS
         self.connections[4][0] = true; // Chat -> Monitors
+        self.sync_to_audio_engine();
     }
 
     pub fn apply_studio_preset(&mut self) {
@@ -438,6 +473,7 @@ impl RoutingMatrix {
         self.connections[1][1] = true; // Inst -> Headphones
         self.connections[2][0] = true; // DAW -> Monitors
         self.connections[2][1] = true; // DAW -> Headphones
+        self.sync_to_audio_engine();
     }
 
     pub fn apply_gaming_preset(&mut self) {
@@ -449,6 +485,7 @@ impl RoutingMatrix {
         self.connections[0][4] = true; // Mic -> Discord
         self.connections[3][1] = true; // Music -> Headphones
         self.connections[4][1] = true; // Discord -> Headphones
+        self.sync_to_audio_engine();
     }
 }
 

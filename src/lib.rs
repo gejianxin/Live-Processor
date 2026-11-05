@@ -1,3 +1,4 @@
+pub mod audio;
 pub mod cli;
 pub mod com;
 pub mod config;

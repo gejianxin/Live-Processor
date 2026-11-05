@@ -1,9 +1,11 @@
+use std::sync::atomic::Ordering;
 use egui::{Color32, Stroke, Ui};
 
 use super::matrix::RoutingMatrix;
 use super::rack::VirtualRack;
 use super::snapshots::SnapshotManager;
 use super::supervisor::SupervisorView;
+use crate::audio::AudioEngine;
 #[cfg(windows)]
 use crate::config::is_64bit_os;
 use crate::i18n::{tr, Language};
@@ -22,6 +24,7 @@ pub struct LiveProcessorApp {
     pub rack: VirtualRack,
     pub supervisor: SupervisorView,
     pub snapshots: SnapshotManager,
+    pub audio_engine: AudioEngine,
     pub master_volume: f32,
     pub panic_muted: bool,
     pub sample_rate: u32,
@@ -31,12 +34,17 @@ pub struct LiveProcessorApp {
 
 impl LiveProcessorApp {
     pub fn new() -> Self {
+        let audio_engine = AudioEngine::new();
+        audio_engine.start();
+        let state = audio_engine.state.clone();
+
         Self {
             active_tab: ActiveTab::Matrix,
-            matrix: RoutingMatrix::default(),
-            rack: VirtualRack::default(),
+            matrix: RoutingMatrix::new(state.clone()),
+            rack: VirtualRack::new(state.clone()),
             supervisor: SupervisorView::default(),
-            snapshots: SnapshotManager::default(),
+            snapshots: SnapshotManager::new(state.clone()),
+            audio_engine,
             master_volume: 0.0,
             panic_muted: false,
             sample_rate: 48000,
@@ -182,20 +190,28 @@ impl LiveProcessorApp {
 
                 if ui.add(panic_btn).clicked() {
                     self.panic_muted = !self.panic_muted;
+                    self.audio_engine.state.panic_muted.store(self.panic_muted, Ordering::Relaxed);
                 }
 
                 ui.add_space(8.0);
 
                 // Master Volume Slider & dB text
                 ui.label(egui::RichText::new(format!("{:+.1} dB", self.master_volume)).size(10.5).monospace().color(Color32::from_rgb(56, 189, 248)));
-                ui.add_sized([50.0, 16.0], egui::Slider::new(&mut self.master_volume, -40.0..=6.0).show_value(false));
+                if ui.add_sized([50.0, 16.0], egui::Slider::new(&mut self.master_volume, -40.0..=6.0).show_value(false)).changed() {
+                    self.audio_engine.state.set_master_volume(self.master_volume);
+                }
                 ui.label(egui::RichText::new(tr("总音量", "Master")).size(10.5).color(Color32::from_rgb(120, 130, 145)));
 
                 ui.add_space(8.0);
 
-                // Latency Badge
-                let latency_ms = (self.buffer_size as f32 / self.sample_rate as f32) * 1000.0;
-                let badge_text = format!("{} Hz | {} smp (~{:.1} ms)", self.sample_rate, self.buffer_size, latency_ms);
+                // Latency & DSP Load Badge
+                let sr = self.audio_engine.state.telemetry.sample_rate.load(Ordering::Relaxed);
+                let buf = self.audio_engine.state.telemetry.buffer_size.load(Ordering::Relaxed);
+                let lat = self.audio_engine.state.telemetry.get_latency_ms();
+                let dsp = self.audio_engine.state.telemetry.get_dsp_load();
+                let is_hw = self.audio_engine.state.telemetry.is_hardware_active.load(Ordering::Relaxed);
+                let hw_label = if is_hw { "WASAPI/ASIO" } else { "DSP Engine" };
+                let badge_text = format!("{} | {} Hz | {} smp (~{:.1} ms) | DSP: {:.0}%", hw_label, sr, buf, lat, dsp);
                 ui.label(
                     egui::RichText::new(badge_text)
                         .size(10.0)

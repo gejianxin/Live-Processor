@@ -1,5 +1,8 @@
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
 use egui::{Color32, Pos2, Rect, Stroke, Ui, Vec2};
 
+use crate::audio::AudioSharedState;
 use crate::i18n::tr;
 
 #[derive(Clone)]
@@ -17,6 +20,7 @@ pub struct ChannelStrip {
 
 pub struct VirtualRack {
     pub channels: Vec<ChannelStrip>,
+    pub audio_state: Option<Arc<AudioSharedState>>,
 }
 
 impl Default for VirtualRack {
@@ -79,11 +83,43 @@ impl Default for VirtualRack {
                     current_peak_r: 0.86,
                 },
             ],
+            audio_state: None,
         }
     }
 }
 
 impl VirtualRack {
+    pub fn new(audio_state: Arc<AudioSharedState>) -> Self {
+        let mut r = Self::default();
+        r.audio_state = Some(audio_state);
+        r.sync_to_audio_engine();
+        r
+    }
+
+    pub fn sync_to_audio_engine(&self) {
+        if let Some(state) = &self.audio_state {
+            for (idx, ch) in self.channels.iter().enumerate() {
+                if idx < state.channel_faders.len() {
+                    state.channel_faders[idx].store(ch.volume_db.to_bits(), Ordering::Relaxed);
+                }
+                if idx < state.channel_pans.len() {
+                    state.channel_pans[idx].store(ch.pan.to_bits(), Ordering::Relaxed);
+                }
+                if idx < state.channel_mutes.len() {
+                    state.channel_mutes[idx].store(ch.mute, Ordering::Relaxed);
+                }
+                if idx < state.channel_solos.len() {
+                    state.channel_solos[idx].store(ch.solo, Ordering::Relaxed);
+                }
+                for (s_idx, (_, active)) in ch.fx_slots.iter().enumerate() {
+                    if s_idx < 4 && idx < state.channel_fx_active.len() {
+                        state.channel_fx_active[idx][s_idx].store(*active, Ordering::Relaxed);
+                    }
+                }
+            }
+        }
+    }
+
     pub fn render(&mut self, ui: &mut Ui, time: f64) {
         let avail_w = ui.available_width();
         let avail_h = ui.available_height().max(420.0);
@@ -110,6 +146,7 @@ impl VirtualRack {
                             ch.mute = false;
                             ch.solo = false;
                         }
+                        self.sync_to_audio_engine();
                     }
                 });
             });
@@ -123,12 +160,13 @@ impl VirtualRack {
             let strip_width = ((avail_w - total_spacing) / channel_count).clamp(180.0, 380.0);
 
             let total_channels = self.channels.len();
+            let audio_ref = self.audio_state.clone();
             egui::ScrollArea::horizontal()
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
                     ui.horizontal(|ui| {
                         for (idx, ch) in self.channels.iter_mut().enumerate() {
-                            render_channel_strip(ui, ch, idx, strip_width, avail_h, time);
+                            render_channel_strip(ui, ch, idx, strip_width, avail_h, time, audio_ref.as_ref());
                             if idx + 1 < total_channels {
                                 ui.add_space(spacing);
                             }
@@ -146,6 +184,7 @@ fn render_channel_strip(
     width: f32,
     height: f32,
     time: f64,
+    audio_ref: Option<&Arc<AudioSharedState>>,
 ) {
     let is_master = idx == 4;
 
@@ -199,7 +238,7 @@ fn render_channel_strip(
                         ui.label(egui::RichText::new(tr("效果器插槽 (INSERTS)", "INSERTS")).size(9.0).color(Color32::from_rgb(100, 110, 125)).strong());
                         ui.add_space(2.0);
 
-                        for (fx_name, active) in ch.fx_slots.iter_mut() {
+                        for (fx_idx, (fx_name, active)) in ch.fx_slots.iter_mut().enumerate() {
                             egui::Frame::NONE
                                 .fill(if *active { Color32::from_rgb(24, 30, 40) } else { Color32::from_rgb(18, 20, 26) })
                                 .corner_radius(egui::CornerRadius::same(3))
@@ -207,12 +246,17 @@ fn render_channel_strip(
                                 .show(ui, |ui| {
                                     ui.horizontal(|ui| {
                                         let dot_color = if *active {
-                                            Color32::from_rgb(56, 189, 248)
+                                             Color32::from_rgb(56, 189, 248)
                                         } else {
                                             Color32::from_rgb(60, 68, 80)
                                         };
                                         if ui.button(egui::RichText::new("●").size(9.0).color(dot_color)).clicked() {
                                             *active = !*active;
+                                            if let Some(state) = audio_ref {
+                                                if idx < state.channel_fx_active.len() && fx_idx < 4 {
+                                                    state.channel_fx_active[idx][fx_idx].store(*active, Ordering::Relaxed);
+                                                }
+                                            }
                                         }
 
                                         ui.label(
@@ -231,7 +275,13 @@ fn render_channel_strip(
                 // Pan Slider
                 ui.horizontal(|ui| {
                     ui.label(egui::RichText::new("L").size(9.0).color(Color32::from_rgb(120, 130, 145)));
-                    ui.add(egui::Slider::new(&mut ch.pan, -1.0..=1.0).show_value(false));
+                    if ui.add(egui::Slider::new(&mut ch.pan, -1.0..=1.0).show_value(false)).changed() {
+                        if let Some(state) = audio_ref {
+                            if idx < state.channel_pans.len() {
+                                state.channel_pans[idx].store(ch.pan.to_bits(), Ordering::Relaxed);
+                            }
+                        }
+                    }
                     ui.label(egui::RichText::new("R").size(9.0).color(Color32::from_rgb(120, 130, 145)));
                 });
 
@@ -251,6 +301,11 @@ fn render_channel_strip(
 
                     if ui.add_sized([((width - 44.0) / 2.0).max(40.0), 22.0], m_btn).clicked() {
                         ch.mute = !ch.mute;
+                        if let Some(state) = audio_ref {
+                            if idx < state.channel_mutes.len() {
+                                state.channel_mutes[idx].store(ch.mute, Ordering::Relaxed);
+                            }
+                        }
                     }
 
                     let s_btn = egui::Button::new(
@@ -265,6 +320,11 @@ fn render_channel_strip(
 
                     if ui.add_sized([((width - 44.0) / 2.0).max(40.0), 22.0], s_btn).clicked() {
                         ch.solo = !ch.solo;
+                        if let Some(state) = audio_ref {
+                            if idx < state.channel_solos.len() {
+                                state.channel_solos[idx].store(ch.solo, Ordering::Relaxed);
+                            }
+                        }
                     }
                 });
 
@@ -274,26 +334,57 @@ fn render_channel_strip(
                 let fader_height = (height - 320.0).clamp(160.0, 340.0);
                 ui.horizontal(|ui| {
                     // Vertical dB Fader
-                    ui.add_sized(
+                    if ui.add_sized(
                         [38.0, fader_height],
                         egui::Slider::new(&mut ch.volume_db, -60.0..=12.0)
                             .vertical()
                             .show_value(false),
-                    );
+                    ).changed() {
+                        if let Some(state) = audio_ref {
+                            if idx < state.channel_faders.len() {
+                                state.channel_faders[idx].store(ch.volume_db.to_bits(), Ordering::Relaxed);
+                            }
+                        }
+                    }
 
                     ui.add_space(8.0);
 
                     // Dual Stereo VU Meters
                     let (vu_rect, _) = ui.allocate_exact_size(Vec2::new(20.0, fader_height), egui::Sense::hover());
 
-                    let sim_l = if ch.mute { 0.0 } else {
-                        (ch.current_peak_l + (time * 4.0 + (idx as f64) * 0.8).sin() as f32 * 0.14).clamp(0.02, 0.96)
-                    };
-                    let sim_r = if ch.mute { 0.0 } else {
-                        (ch.current_peak_r + (time * 4.2 + (idx as f64) * 0.8 + 1.2).sin() as f32 * 0.14).clamp(0.02, 0.96)
+                    let (meter_l, meter_r) = if let Some(state) = audio_ref {
+                        if is_master {
+                            let l = f32::from_bits(state.master_peak_l.load(Ordering::Relaxed));
+                            let r = f32::from_bits(state.master_peak_r.load(Ordering::Relaxed));
+                            if ch.mute { (0.0, 0.0) } else { (l, r) }
+                        } else {
+                            if ch.mute {
+                                (0.0, 0.0)
+                            } else {
+                                let in_peak = if idx < state.input_peaks.len() {
+                                    f32::from_bits(state.input_peaks[idx].load(Ordering::Relaxed))
+                                } else {
+                                    0.5
+                                };
+                                let gain = if ch.volume_db <= -59.0 { 0.0 } else { 10.0_f32.powf(ch.volume_db / 20.0) };
+                                let pan_l = ((1.0 - ch.pan) * 0.5).sqrt();
+                                let pan_r = ((1.0 + ch.pan) * 0.5).sqrt();
+                                let l = (in_peak * gain * pan_l).clamp(0.0, 1.0);
+                                let r = (in_peak * gain * pan_r).clamp(0.0, 1.0);
+                                (l, r)
+                            }
+                        }
+                    } else {
+                        let sim_l = if ch.mute { 0.0 } else {
+                            (ch.current_peak_l + (time * 4.0 + (idx as f64) * 0.8).sin() as f32 * 0.14).clamp(0.02, 0.96)
+                        };
+                        let sim_r = if ch.mute { 0.0 } else {
+                            (ch.current_peak_r + (time * 4.2 + (idx as f64) * 0.8 + 1.2).sin() as f32 * 0.14).clamp(0.02, 0.96)
+                        };
+                        (sim_l, sim_r)
                     };
 
-                    render_stereo_meter(ui, vu_rect, sim_l, sim_r);
+                    render_stereo_meter(ui, vu_rect, meter_l, meter_r);
                 });
 
                 ui.add_space(6.0);

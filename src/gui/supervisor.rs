@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 use egui::{Color32, Stroke, Ui};
 
+use crate::audio::AsioLinkProBridge;
 use crate::config::{is_64bit_os, DeviceLayout, DEFAULT_START_MENU_GROUP};
 use crate::driver::query_driver_service_status;
 use crate::i18n::tr;
@@ -52,6 +53,7 @@ pub struct SupervisorView {
     pub selected_layout: DeviceLayout,
     pub logs: Vec<String>,
     pub audit: SystemAuditState,
+    pub bridge: AsioLinkProBridge,
 }
 
 impl Default for SupervisorView {
@@ -62,6 +64,7 @@ impl Default for SupervisorView {
                 format!("[SYSTEM] {} - {}", tr("Live-Processor 驱动与系统守护中心已就绪", "Live-Processor Supervisor Ready"), tr("安全模式已加载", "Secure Mode Loaded")),
             ],
             audit: SystemAuditState::probe(),
+            bridge: AsioLinkProBridge::probe(),
         }
     }
 }
@@ -69,6 +72,7 @@ impl Default for SupervisorView {
 impl SupervisorView {
     pub fn refresh_audit(&mut self) {
         self.audit = SystemAuditState::probe();
+        self.bridge = AsioLinkProBridge::probe();
         self.log(tr("[AUDIT] 系统状态诊断数据已刷新。", "[AUDIT] System status diagnostics refreshed."));
     }
 
@@ -120,6 +124,7 @@ impl SupervisorView {
                         render_kv(ui, tr("安装路径", "Path"), &truncate_str(&path_str, 24));
                         render_kv(ui, tr("系统架构", "Arch"), if self.audit.is_64bit { "64-bit (x64)" } else { "32-bit (x86)" });
                         render_kv(ui, tr("服务状态", "Service"), &self.audit.service_status);
+                        render_kv(ui, tr("伴侣工具", "ASIO Tool"), if self.bridge.is_tool_running { tr("运行中 [挂接]", "Running") } else { tr("未启动", "Stopped") });
                     },
                 );
 
@@ -198,6 +203,16 @@ impl SupervisorView {
                             });
 
                         ui.add_space(12.0);
+
+                        // Launch ASIO Link Tool Button
+                        if ui.button(egui::RichText::new(tr("启动 ASIO Link Tool", "Launch ASIO Tool")).color(Color32::from_rgb(52, 211, 153)).strong()).clicked() {
+                            if self.bridge.launch_tool() {
+                                self.log(tr("[成功] 已启动 ASIO Link Tool 伴侣程序", "[SUCCESS] Launched ASIO Link Tool"));
+                                self.refresh_audit();
+                            } else {
+                                self.log(tr("[提示] 未检测到已安装的 asiolinktool.exe，请先点击'安装 / 升级驱动'", "[INFO] asiolinktool.exe not found. Please install driver first."));
+                            }
+                        }
 
                         // Install Button
                         if ui.button(egui::RichText::new(tr("安装 / 升级驱动", "Install / Upgrade")).strong()).clicked() {
