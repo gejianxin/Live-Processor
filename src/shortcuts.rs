@@ -1,10 +1,12 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use std::fs;
 use std::path::Path;
+#[cfg(windows)]
 use std::process::Command;
 
 use crate::config::{get_start_menu_programs_dir, is_64bit_os};
 
+#[allow(unused_variables)]
 pub fn create_shortcut(
     shortcut_path: &Path,
     target_path: &Path,
@@ -12,8 +14,10 @@ pub fn create_shortcut(
     description: Option<&str>,
     icon_path: Option<&Path>,
 ) -> Result<()> {
-    let script = format!(
-        r#"$ws = New-Object -ComObject WScript.Shell;
+    #[cfg(windows)]
+    {
+        let script = format!(
+            r#"$ws = New-Object -ComObject WScript.Shell;
 $s = $ws.CreateShortcut('{}');
 $s.TargetPath = '{}';
 $s.Arguments = '{}';
@@ -21,25 +25,33 @@ $s.Description = '{}';
 {}
 $s.Save();
 "#,
-        shortcut_path.display().to_string().replace('\'', "''"),
-        target_path.display().to_string().replace('\'', "''"),
-        arguments.unwrap_or("").replace('\'', "''"),
-        description.unwrap_or("").replace('\'', "''"),
-        icon_path
-            .map(|p| format!(
-                "$s.IconLocation = '{}';",
-                p.display().to_string().replace('\'', "''")
-            ))
-            .unwrap_or_default()
-    );
+            shortcut_path.display().to_string().replace('\'', "''"),
+            target_path.display().to_string().replace('\'', "''"),
+            arguments.unwrap_or("").replace('\'', "''"),
+            description.unwrap_or("").replace('\'', "''"),
+            icon_path
+                .map(|p| format!(
+                    "$s.IconLocation = '{}';",
+                    p.display().to_string().replace('\'', "''")
+                ))
+                .unwrap_or_default()
+        );
 
-    let status = Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
-        .status()
-        .with_context(|| format!("Failed to create shortcut at {}", shortcut_path.display()))?;
+        let _ = Command::new("powershell")
+            .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+            .status();
+    }
 
-    if !status.success() {
-        // Non-critical: continue even if shortcut creation fails
+    #[cfg(not(windows))]
+    {
+        let desktop_content = format!(
+            "[Desktop Entry]\nType=Application\nName={}\nExec={} {}\nComment={}\nTerminal=false\nCategories=AudioVideo;Audio;\n",
+            shortcut_path.file_stem().and_then(|s| s.to_str()).unwrap_or("Live-Processor"),
+            target_path.display(),
+            arguments.unwrap_or(""),
+            description.unwrap_or("")
+        );
+        let _ = fs::write(shortcut_path.with_extension("desktop"), desktop_content);
     }
 
     Ok(())
@@ -48,10 +60,8 @@ $s.Save();
 pub fn create_start_menu_shortcuts(app_dir: &Path, group_name: &str) -> Result<()> {
     let is_64bit = is_64bit_os();
     let group_dir = get_start_menu_programs_dir().join(group_name);
-    fs::create_dir_all(&group_dir)
-        .with_context(|| format!("Failed to create Start Menu folder {}", group_dir.display()))?;
+    let _ = fs::create_dir_all(&group_dir);
 
-    // Main ASIO Link Pro Tool
     let main_tool = if is_64bit {
         app_dir.join("x64").join("asiolinktool.exe")
     } else {
@@ -69,7 +79,6 @@ pub fn create_start_menu_shortcuts(app_dir: &Path, group_name: &str) -> Result<(
         );
     }
 
-    // 32-bit Tool shortcut on 64-bit systems
     if is_64bit {
         let tool32 = app_dir.join("asiolinktool.exe");
         if tool32.exists() {
@@ -84,7 +93,6 @@ pub fn create_start_menu_shortcuts(app_dir: &Path, group_name: &str) -> Result<(
         }
     }
 
-    // Documentation
     let pdf = app_dir.join("ASIO Link Technology.pdf");
     if pdf.exists() {
         let lnk_pdf = group_dir.join("ASIO Link Technology.lnk");
@@ -97,7 +105,6 @@ pub fn create_start_menu_shortcuts(app_dir: &Path, group_name: &str) -> Result<(
         );
     }
 
-    // Uninstaller
     let uninstaller = app_dir.join("live-processor.exe");
     if uninstaller.exists() {
         let lnk_uninst = group_dir.join("Uninstall Live-Processor.lnk");

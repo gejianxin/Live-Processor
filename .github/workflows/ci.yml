@@ -11,22 +11,53 @@ env:
 
 jobs:
   build:
-    runs-on: windows-latest
+    name: Build (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            name: live-processor-windows-x64.exe
+            bin: target/x86_64-pc-windows-msvc/release/live-processor.exe
+            use_cross: false
+
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            name: live-processor-linux-x64
+            bin: target/x86_64-unknown-linux-gnu/release/live-processor
+            use_cross: false
+
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            name: live-processor-linux-arm64
+            bin: target/aarch64-unknown-linux-gnu/release/live-processor
+            use_cross: true
+
+    runs-on: ${{ matrix.os }}
 
     steps:
     - uses: actions/checkout@v4
 
     - name: Set up Rust
       uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: ${{ matrix.target }}
 
-    - name: Cargo Check
-      run: cargo check --verbose
+    - name: Install cross tool
+      if: matrix.use_cross
+      run: cargo install cross --git https://github.com/cross-rs/cross
 
-    - name: Build Release
-      run: cargo build --release --verbose
+    - name: Build with Cargo
+      if: "!matrix.use_cross"
+      run: cargo build --release --target ${{ matrix.target }}
+
+    - name: Build with Cross
+      if: matrix.use_cross
+      run: cross build --release --target ${{ matrix.target }}
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: live-processor-x86_64-pc-windows-msvc
-        path: target/release/live-processor.exe
+        name: ${{ matrix.name }}
+        path: ${{ matrix.bin }}

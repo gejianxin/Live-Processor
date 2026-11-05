@@ -1,14 +1,22 @@
 use std::path::PathBuf;
 use clap::ValueEnum;
 
+#[allow(dead_code)]
 pub const DEFAULT_APP_DIR_NAME: &str = "ASIOLinkPro";
+#[allow(dead_code)]
 pub const DEFAULT_START_MENU_GROUP: &str = "ASIO Link Pro";
+#[allow(dead_code)]
 pub const REGISTRY_FIX_TASK_NAME: &str = "ASIOLinkPro Registry Fix";
 
+#[allow(dead_code)]
 pub const REG_KEY_ASIOLINK: &str = "Software\\ASIOLinkPro";
+#[allow(dead_code)]
 pub const REG_KEY_ODEUSAUDIO: &str = "SOFTWARE\\ODeusAudio\\ASIOLinkPro";
+#[allow(dead_code)]
 pub const REG_KEY_CI_POLICY: &str = "SYSTEM\\CurrentControlSet\\Control\\CI\\Policy";
+#[allow(dead_code)]
 pub const REG_KEY_UNINSTALL: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\ASIOLinkPro";
+#[allow(dead_code)]
 pub const REG_KEY_UNINSTALL_LIVE_PROCESSOR: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Live-Processor";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Default)]
@@ -30,6 +38,7 @@ impl DeviceLayout {
         }
     }
 
+    #[allow(dead_code)]
     pub fn num_channels(&self) -> u32 {
         match self {
             Self::Layout4x8 => 8,
@@ -53,37 +62,108 @@ impl DeviceLayout {
 }
 
 pub fn get_default_install_dir() -> PathBuf {
-    // Prefer Program Files (x86) on 64-bit systems, or Program Files on 32-bit systems
-    if let Ok(pf32) = std::env::var("ProgramFiles(x86)") {
-        PathBuf::from(pf32).join(DEFAULT_APP_DIR_NAME)
-    } else if let Ok(pf) = std::env::var("ProgramFiles") {
-        PathBuf::from(pf).join(DEFAULT_APP_DIR_NAME)
-    } else {
-        PathBuf::from("C:\\Program Files (x86)").join(DEFAULT_APP_DIR_NAME)
+    #[cfg(windows)]
+    {
+        if let Ok(pf32) = std::env::var("ProgramFiles(x86)") {
+            PathBuf::from(pf32).join(DEFAULT_APP_DIR_NAME)
+        } else if let Ok(pf) = std::env::var("ProgramFiles") {
+            PathBuf::from(pf).join(DEFAULT_APP_DIR_NAME)
+        } else {
+            PathBuf::from("C:\\Program Files (x86)").join(DEFAULT_APP_DIR_NAME)
+        }
+    }
+
+    #[cfg(not(windows))]
+    {
+        // On Linux / Unix, check if running in a Wine prefix
+        if let Ok(wineprefix) = std::env::var("WINEPREFIX") {
+            PathBuf::from(wineprefix)
+                .join("drive_c")
+                .join("Program Files (x86)")
+                .join(DEFAULT_APP_DIR_NAME)
+        } else if let Ok(home) = std::env::var("HOME") {
+            let wine_default = PathBuf::from(&home)
+                .join(".wine")
+                .join("drive_c")
+                .join("Program Files (x86)")
+                .join(DEFAULT_APP_DIR_NAME);
+            if wine_default.parent().map(|p| p.exists()).unwrap_or(false) {
+                wine_default
+            } else {
+                PathBuf::from(home)
+                    .join(".local")
+                    .join("share")
+                    .join("live-processor")
+            }
+        } else {
+            PathBuf::from("/opt/live-processor")
+        }
     }
 }
 
 pub fn is_64bit_os() -> bool {
-    // Standard Windows check
-    std::env::var("ProgramFiles(x86)").is_ok() || cfg!(target_arch = "x86_64")
+    #[cfg(windows)]
+    {
+        std::env::var("ProgramFiles(x86)").is_ok() || cfg!(target_arch = "x86_64") || cfg!(target_arch = "aarch64")
+    }
+
+    #[cfg(not(windows))]
+    {
+        cfg!(target_pointer_width = "64")
+    }
 }
 
 pub fn get_system_drivers_dir() -> PathBuf {
-    if let Ok(sys_root) = std::env::var("SystemRoot") {
-        PathBuf::from(sys_root).join("System32").join("drivers")
-    } else {
-        PathBuf::from("C:\\Windows\\System32\\drivers")
+    #[cfg(windows)]
+    {
+        if let Ok(sys_root) = std::env::var("SystemRoot") {
+            PathBuf::from(sys_root).join("System32").join("drivers")
+        } else {
+            PathBuf::from("C:\\Windows\\System32\\drivers")
+        }
+    }
+
+    #[cfg(not(windows))]
+    {
+        if let Ok(wineprefix) = std::env::var("WINEPREFIX") {
+            PathBuf::from(wineprefix)
+                .join("drive_c")
+                .join("windows")
+                .join("system32")
+                .join("drivers")
+        } else if let Ok(home) = std::env::var("HOME") {
+            PathBuf::from(home)
+                .join(".wine")
+                .join("drive_c")
+                .join("windows")
+                .join("system32")
+                .join("drivers")
+        } else {
+            std::env::temp_dir().join("asiovadpro_drivers")
+        }
     }
 }
 
 pub fn get_start_menu_programs_dir() -> PathBuf {
-    if let Ok(program_data) = std::env::var("ProgramData") {
-        PathBuf::from(program_data)
-            .join("Microsoft")
-            .join("Windows")
-            .join("Start Menu")
-            .join("Programs")
-    } else {
-        PathBuf::from("C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs")
+    #[cfg(windows)]
+    {
+        if let Ok(program_data) = std::env::var("ProgramData") {
+            PathBuf::from(program_data)
+                .join("Microsoft")
+                .join("Windows")
+                .join("Start Menu")
+                .join("Programs")
+        } else {
+            PathBuf::from("C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs")
+        }
+    }
+
+    #[cfg(not(windows))]
+    {
+        if let Ok(home) = std::env::var("HOME") {
+            PathBuf::from(home).join(".local").join("share").join("applications")
+        } else {
+            PathBuf::from("/usr/share/applications")
+        }
     }
 }

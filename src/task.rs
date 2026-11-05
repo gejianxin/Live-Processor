@@ -1,9 +1,15 @@
-use anyhow::{bail, Context, Result};
-use std::fs;
-use std::process::Command;
+use anyhow::Result;
 
+#[cfg(windows)]
+use anyhow::{bail, Context};
+#[cfg(windows)]
+use std::fs;
+#[cfg(windows)]
+use std::process::Command;
+#[cfg(windows)]
 use crate::config::REGISTRY_FIX_TASK_NAME;
 
+#[cfg(windows)]
 pub fn generate_task_xml() -> String {
     let reg_exe = if let Ok(sys_root) = std::env::var("SystemRoot") {
         format!("{}\\System32\\reg.exe", sys_root)
@@ -73,49 +79,68 @@ pub fn generate_task_xml() -> String {
 }
 
 pub fn install_registry_fix_task() -> Result<()> {
-    let temp_dir = std::env::temp_dir();
-    let xml_path = temp_dir.join("asiolinkpro-registryfix-task.xml");
+    #[cfg(windows)]
+    {
+        let temp_dir = std::env::temp_dir();
+        let xml_path = temp_dir.join("asiolinkpro-registryfix-task.xml");
 
-    // Write UTF-16LE or UTF-8 XML (Windows schtasks parses UTF-8 with BOM or standard XML)
-    fs::write(&xml_path, generate_task_xml())
-        .with_context(|| format!("Failed to write task XML to {}", xml_path.display()))?;
+        fs::write(&xml_path, generate_task_xml())
+            .with_context(|| format!("Failed to write task XML to {}", xml_path.display()))?;
 
-    let output = Command::new("schtasks")
-        .args([
-            "/Create",
-            "/TN",
-            REGISTRY_FIX_TASK_NAME,
-            "/XML",
-            xml_path.to_str().unwrap_or(""),
-            "/F",
-        ])
-        .output()
-        .context("Failed to invoke schtasks.exe")?;
+        let output = Command::new("schtasks")
+            .args([
+                "/Create",
+                "/TN",
+                REGISTRY_FIX_TASK_NAME,
+                "/XML",
+                xml_path.to_str().unwrap_or(""),
+                "/F",
+            ])
+            .output()
+            .context("Failed to invoke schtasks.exe")?;
 
-    let _ = fs::remove_file(&xml_path);
+        let _ = fs::remove_file(&xml_path);
 
-    if !output.status.success() {
-        let err_msg = String::from_utf8_lossy(&output.stderr);
-        bail!("Failed to register scheduled task: {}", err_msg.trim());
+        if !output.status.success() {
+            let err_msg = String::from_utf8_lossy(&output.stderr);
+            bail!("Failed to register scheduled task: {}", err_msg.trim());
+        }
+    }
+
+    #[cfg(not(windows))]
+    {
+        // Scheduled task is a Windows-specific mechanism
     }
 
     Ok(())
 }
 
 pub fn verify_registry_fix_task() -> bool {
-    let output = Command::new("schtasks")
-        .args(["/Query", "/TN", REGISTRY_FIX_TASK_NAME])
-        .output();
+    #[cfg(windows)]
+    {
+        let output = Command::new("schtasks")
+            .args(["/Query", "/TN", REGISTRY_FIX_TASK_NAME])
+            .output();
 
-    match output {
-        Ok(out) => out.status.success(),
-        Err(_) => false,
+        match output {
+            Ok(out) => out.status.success(),
+            Err(_) => false,
+        }
+    }
+
+    #[cfg(not(windows))]
+    {
+        true
     }
 }
 
 pub fn remove_registry_fix_task() -> Result<()> {
-    let _ = Command::new("schtasks")
-        .args(["/Delete", "/TN", REGISTRY_FIX_TASK_NAME, "/F"])
-        .output();
+    #[cfg(windows)]
+    {
+        let _ = Command::new("schtasks")
+            .args(["/Delete", "/TN", REGISTRY_FIX_TASK_NAME, "/F"])
+            .output();
+    }
+
     Ok(())
 }
