@@ -78,12 +78,16 @@ impl eframe::App for LiveProcessorApp {
             .show(ui, |ui| {
                 ui.set_min_height(available_space);
 
-                match self.active_tab {
-                    ActiveTab::Matrix => self.matrix.render(ui, time),
-                    ActiveTab::Rack => self.rack.render(ui, time),
-                    ActiveTab::Supervisor => self.supervisor.render(ui),
-                    ActiveTab::Snapshots => self.snapshots.render(ui),
-                }
+                egui::ScrollArea::both()
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        match self.active_tab {
+                            ActiveTab::Matrix => self.matrix.render(ui, time),
+                            ActiveTab::Rack => self.rack.render(ui, time),
+                            ActiveTab::Supervisor => self.supervisor.render(ui),
+                            ActiveTab::Snapshots => self.snapshots.render(ui),
+                        }
+                    });
             });
 
         ui.add_space(2.0);
@@ -144,7 +148,7 @@ impl LiveProcessorApp {
 
             // Right-aligned audio controls with guaranteed padding
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.add_space(6.0); // Safety right margin to prevent window border clipping
+                ui.add_space(16.0); // Generous safety right margin to guarantee zero clipping
 
                 // Language Switcher Button
                 let lang_label = match Language::current() {
@@ -184,17 +188,17 @@ impl LiveProcessorApp {
 
                 // Master Volume Slider & dB text
                 ui.label(egui::RichText::new(format!("{:+.1} dB", self.master_volume)).size(10.5).monospace().color(Color32::from_rgb(56, 189, 248)));
-                ui.add_sized([60.0, 16.0], egui::Slider::new(&mut self.master_volume, -40.0..=6.0).show_value(false));
-                ui.label(egui::RichText::new(tr("总音量:", "Master:")).size(10.5).color(Color32::from_rgb(120, 130, 145)));
+                ui.add_sized([50.0, 16.0], egui::Slider::new(&mut self.master_volume, -40.0..=6.0).show_value(false));
+                ui.label(egui::RichText::new(tr("总音量", "Master")).size(10.5).color(Color32::from_rgb(120, 130, 145)));
 
-                ui.add_space(10.0);
+                ui.add_space(8.0);
 
                 // Latency Badge
                 let latency_ms = (self.buffer_size as f32 / self.sample_rate as f32) * 1000.0;
                 let badge_text = format!("{} Hz | {} smp (~{:.1} ms)", self.sample_rate, self.buffer_size, latency_ms);
                 ui.label(
                     egui::RichText::new(badge_text)
-                        .size(10.5)
+                        .size(10.0)
                         .color(Color32::from_rgb(52, 211, 153))
                         .monospace(),
                 );

@@ -19,11 +19,52 @@ pub fn run_gui() -> Result<()> {
         "Live-Processor Pro",
         options,
         Box::new(|cc| {
+            setup_custom_fonts(&cc.egui_ctx);
             configure_audio_theme(&cc.egui_ctx);
             Ok(Box::new(app::LiveProcessorApp::new()))
         }),
     )
     .map_err(|e| anyhow::anyhow!("Failed to launch GUI: {}", e))
+}
+
+fn setup_custom_fonts(ctx: &egui::Context) {
+    let mut fonts = egui::FontDefinitions::default();
+
+    #[cfg(windows)]
+    let candidates = [
+        "C:\\Windows\\Fonts\\msyh.ttc",
+        "C:\\Windows\\Fonts\\msyhbd.ttc",
+        "C:\\Windows\\Fonts\\simhei.ttf",
+    ];
+
+    #[cfg(not(windows))]
+    let candidates = [
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+        "/System/Library/Fonts/PingFang.ttc",
+    ];
+
+    for path in &candidates {
+        if let Ok(data) = std::fs::read(path) {
+            fonts.font_data.insert(
+                "system_cjk".to_owned(),
+                std::sync::Arc::new(egui::FontData::from_owned(data)),
+            );
+
+            if let Some(prop) = fonts.families.get_mut(&egui::FontFamily::Proportional) {
+                prop.insert(0, "system_cjk".to_owned());
+            }
+
+            if let Some(mono) = fonts.families.get_mut(&egui::FontFamily::Monospace) {
+                mono.push("system_cjk".to_owned());
+            }
+
+            break;
+        }
+    }
+
+    ctx.set_fonts(fonts);
 }
 
 fn configure_audio_theme(ctx: &egui::Context) {

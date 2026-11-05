@@ -1,41 +1,41 @@
-use egui::{Color32, Pos2, Rect, Stroke, Ui, Vec2};
+use egui::{Align2, Color32, FontId, Pos2, Rect, Stroke, Ui, Vec2};
 
 use crate::i18n::tr;
 
-pub const SOURCES_ZH: &[&str] = &[
-    "ASIO IN 1-2 (麦克风/人声)",
-    "ASIO IN 3-4 (乐器/硬件输入)",
-    "VIRTUAL 1-2 (DAW 宿主总输出)",
-    "VIRTUAL 3-4 (音乐播放器/媒体)",
-    "VIRTUAL 5-6 (语音通话/连麦)",
-    "VIRTUAL 7-8 (系统辅助/Aux)",
+pub const SOURCES_ZH: &[(&str, &str)] = &[
+    ("ASIO IN 1-2", "麦克风 / 人声"),
+    ("ASIO IN 3-4", "乐器 / 硬件输入"),
+    ("VIRTUAL 1-2", "DAW 宿主总输出"),
+    ("VIRTUAL 3-4", "音乐播放器 / 媒体"),
+    ("VIRTUAL 5-6", "语音通话 / 连麦"),
+    ("VIRTUAL 7-8", "系统辅助 / Aux"),
 ];
 
-pub const SOURCES_EN: &[&str] = &[
-    "ASIO IN 1-2 (Mic / Pre)",
-    "ASIO IN 3-4 (Line / Synth)",
-    "VIRTUAL 1-2 (DAW Master)",
-    "VIRTUAL 3-4 (Music / Media)",
-    "VIRTUAL 5-6 (Voice / Chat)",
-    "VIRTUAL 7-8 (System / Aux)",
+pub const SOURCES_EN: &[(&str, &str)] = &[
+    ("ASIO IN 1-2", "Mic / Preamp"),
+    ("ASIO IN 3-4", "Line / Synth"),
+    ("VIRTUAL 1-2", "DAW Master"),
+    ("VIRTUAL 3-4", "Music / Media"),
+    ("VIRTUAL 5-6", "Voice / Discord"),
+    ("VIRTUAL 7-8", "System / Aux"),
 ];
 
-pub const DESTINATIONS_ZH: &[&str] = &[
-    "ASIO OUT 1-2\n(主监听音箱)",
-    "ASIO OUT 3-4\n(监听耳机)",
-    "VIRTUAL 1-2\n(OBS 直播流)",
-    "VIRTUAL 3-4\n(DAW 回环录音)",
-    "VIRTUAL 5-6\n(连麦麦克风)",
-    "VIRTUAL 7-8\n(辅助发送 Aux)",
+pub const DESTINATIONS_ZH: &[(&str, &str)] = &[
+    ("ASIO OUT 1-2", "主监听音箱"),
+    ("ASIO OUT 3-4", "监听耳机"),
+    ("VIRTUAL 1-2",  "OBS 直播流"),
+    ("VIRTUAL 3-4",  "DAW 回环录音"),
+    ("VIRTUAL 5-6",  "连麦麦克风"),
+    ("VIRTUAL 7-8",  "辅助发送 Aux"),
 ];
 
-pub const DESTINATIONS_EN: &[&str] = &[
-    "ASIO OUT 1-2\n(Monitors)",
-    "ASIO OUT 3-4\n(Headphones)",
-    "VIRTUAL 1-2\n(OBS Stream)",
-    "VIRTUAL 3-4\n(DAW Loopback)",
-    "VIRTUAL 5-6\n(Voice Mic)",
-    "VIRTUAL 7-8\n(Aux Send)",
+pub const DESTINATIONS_EN: &[(&str, &str)] = &[
+    ("ASIO OUT 1-2", "Main Monitors"),
+    ("ASIO OUT 3-4", "Headphones"),
+    ("VIRTUAL 1-2",  "OBS Stream"),
+    ("VIRTUAL 3-4",  "DAW Loopback"),
+    ("VIRTUAL 5-6",  "Voice Mic"),
+    ("VIRTUAL 7-8",  "Aux Send"),
 ];
 
 pub struct RoutingMatrix {
@@ -74,8 +74,7 @@ impl RoutingMatrix {
         let sources = if is_zh { SOURCES_ZH } else { SOURCES_EN };
         let destinations = if is_zh { DESTINATIONS_ZH } else { DESTINATIONS_EN };
 
-        let avail_w = ui.available_width();
-        let avail_h = ui.available_height().max(420.0);
+        let total_avail_w = ui.available_width();
 
         ui.vertical(|ui| {
             // Title & Global Preset Action Row
@@ -92,6 +91,7 @@ impl RoutingMatrix {
                 );
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.add_space(4.0);
                     if ui.button(egui::RichText::new(tr("清空所有跳线", "Clear All")).size(11.0)).clicked() {
                         for row in &mut self.connections {
                             for cell in row {
@@ -107,11 +107,12 @@ impl RoutingMatrix {
 
             ui.add_space(8.0);
 
-            // Responsive Two-Column Layout
-            // Left Panel (73% width): Visual Patchbay Matrix Table
-            // Right Panel (27% width): Route Inspector & Preset Control Rack
-            let inspector_w = 280.0;
-            let matrix_w = (avail_w - inspector_w - 14.0).max(560.0);
+            // Responsive Two-Column Layout:
+            // Left Panel: Visual Patchbay Matrix Grid (Flexible, shrinks/grows gracefully)
+            // Right Panel: Route Inspector & Preset Control Rack (Fixed 240px width)
+            let inspector_w = 240.0;
+            let gap_between_panels = 12.0;
+            let matrix_w = (total_avail_w - inspector_w - gap_between_panels).max(520.0);
 
             ui.horizontal(|ui| {
                 // ==========================================
@@ -124,61 +125,72 @@ impl RoutingMatrix {
                     .inner_margin(12.0)
                     .show(ui, |ui| {
                         ui.set_width(matrix_w);
-                        ui.set_min_height(avail_h);
 
                         ui.vertical(|ui| {
-                            let label_col_w = 200.0;
+                            // Column geometry:
+                            // Fixed label column width guarantees ZERO misalignment across rows
+                            let label_col_w = 180.0;
                             let col_count = destinations.len() as f32;
-                            let col_w = ((matrix_w - label_col_w - 28.0) / col_count).clamp(52.0, 120.0);
+                            let col_gap = 5.0;
+                            let total_gaps = col_gap * col_count;
+                            let cell_w = ((matrix_w - label_col_w - 24.0 - total_gaps) / col_count).clamp(50.0, 110.0);
+                            let cell_h = 36.0;
+                            let header_h = 48.0;
 
-                            // Top Header Row: Column Destinations
+                            // ------------------------------------
+                            // Header Row: Output Destination Cards
+                            // ------------------------------------
                             ui.horizontal(|ui| {
-                                // Corner Box: Input / Output indicator
-                                egui::Frame::NONE
-                                    .fill(Color32::from_rgb(26, 30, 38))
-                                    .stroke(Stroke::new(1.0, Color32::from_rgb(44, 52, 66)))
-                                    .corner_radius(egui::CornerRadius::same(4))
-                                    .inner_margin(egui::Margin::symmetric(6, 6))
-                                    .show(ui, |ui| {
-                                        ui.set_width(label_col_w);
-                                        ui.set_height(44.0);
-                                        ui.vertical_centered(|ui| {
-                                            ui.label(egui::RichText::new(tr("输入来源 ↓ \\ 输出目标 →", "Inputs ↓ \\ Outputs →")).size(11.0).color(Color32::from_rgb(140, 152, 168)).strong());
-                                        });
-                                    });
+                                // Corner Box: Input \ Output Legend (Centered text)
+                                let (corner_rect, _) = ui.allocate_exact_size(Vec2::new(label_col_w, header_h), egui::Sense::hover());
+                                let p = ui.painter();
+                                p.rect_filled(corner_rect, 4.0, Color32::from_rgb(26, 30, 38));
+                                p.rect_stroke(corner_rect, 4.0, Stroke::new(1.0, Color32::from_rgb(44, 52, 66)), egui::StrokeKind::Inside);
+                                p.text(
+                                    corner_rect.center(),
+                                    Align2::CENTER_CENTER,
+                                    tr("输入来源 ↓  \\  输出目标 →", "Inputs ↓  \\  Outputs →"),
+                                    FontId::proportional(11.0),
+                                    Color32::from_rgb(150, 162, 178),
+                                );
 
-                                ui.add_space(4.0);
+                                ui.add_space(col_gap);
 
-                                // Destination Columns
-                                for dest in destinations {
-                                    egui::Frame::NONE
-                                        .fill(Color32::from_rgb(26, 32, 42))
-                                        .stroke(Stroke::new(1.0, Color32::from_rgb(46, 56, 72)))
-                                        .corner_radius(egui::CornerRadius::same(4))
-                                        .inner_margin(egui::Margin::symmetric(4, 4))
-                                        .show(ui, |ui| {
-                                            ui.set_width(col_w);
-                                            ui.set_height(44.0);
-                                            ui.vertical_centered(|ui| {
-                                                for line in dest.lines() {
-                                                    ui.label(
-                                                        egui::RichText::new(line)
-                                                            .size(10.0)
-                                                            .color(Color32::from_rgb(220, 228, 238))
-                                                            .strong(),
-                                                    );
-                                                }
-                                            });
-                                        });
+                                // Destination Header Cards
+                                for (tag, name) in destinations {
+                                    let (hdr_rect, _) = ui.allocate_exact_size(Vec2::new(cell_w, header_h), egui::Sense::hover());
+                                    let p = ui.painter();
+                                    p.rect_filled(hdr_rect, 4.0, Color32::from_rgb(26, 32, 42));
+                                    p.rect_stroke(hdr_rect, 4.0, Stroke::new(1.0, Color32::from_rgb(46, 56, 72)), egui::StrokeKind::Inside);
 
-                                    ui.add_space(4.0);
+                                    // Line 1: Port Tag (Top, Cyan, bold)
+                                    p.text(
+                                        Pos2::new(hdr_rect.center().x, hdr_rect.min.y + 14.0),
+                                        Align2::CENTER_CENTER,
+                                        *tag,
+                                        FontId::proportional(10.5),
+                                        Color32::from_rgb(56, 189, 248),
+                                    );
+
+                                    // Line 2: Port Name (Bottom, White/Silver, bold)
+                                    p.text(
+                                        Pos2::new(hdr_rect.center().x, hdr_rect.min.y + 33.0),
+                                        Align2::CENTER_CENTER,
+                                        *name,
+                                        FontId::proportional(11.0),
+                                        Color32::from_rgb(225, 235, 246),
+                                    );
+
+                                    ui.add_space(col_gap);
                                 }
                             });
 
                             ui.add_space(6.0);
 
-                            // Rows: Audio Sources
-                            for (row_idx, source) in sources.iter().enumerate() {
+                            // ------------------------------------
+                            // Data Rows: Audio Sources & Sockets
+                            // ------------------------------------
+                            for (row_idx, (tag, name)) in sources.iter().enumerate() {
                                 let row_bg = if row_idx % 2 == 0 {
                                     Color32::from_rgb(23, 27, 34)
                                 } else {
@@ -187,96 +199,100 @@ impl RoutingMatrix {
 
                                 let level = (self.signal_levels[row_idx] + (time * 3.0 + (row_idx as f64) * 0.7).sin() as f32 * 0.14).clamp(0.04, 0.98);
 
-                                egui::Frame::NONE
-                                    .fill(row_bg)
-                                    .stroke(Stroke::new(1.0, Color32::from_rgb(32, 38, 48)))
-                                    .corner_radius(egui::CornerRadius::same(4))
-                                    .inner_margin(egui::Margin::symmetric(6, 4))
-                                    .show(ui, |ui| {
-                                        ui.horizontal(|ui| {
-                                            // 1. Source Channel Card (VU Meter + Name)
-                                            ui.allocate_ui_with_layout(
-                                                Vec2::new(label_col_w, 36.0),
-                                                egui::Layout::left_to_right(egui::Align::Center),
-                                                |ui| {
-                                                    // 5-Segment LED Signal Bar
-                                                    render_segment_meter(ui, level);
-                                                    ui.add_space(6.0);
+                                ui.horizontal(|ui| {
+                                    // 1. Source Channel Card
+                                    let (src_rect, _) = ui.allocate_exact_size(Vec2::new(label_col_w, cell_h), egui::Sense::hover());
+                                    let p = ui.painter();
+                                    p.rect_filled(src_rect, 4.0, row_bg);
+                                    p.rect_stroke(src_rect, 4.0, Stroke::new(1.0, Color32::from_rgb(34, 40, 52)), egui::StrokeKind::Inside);
 
-                                                    // Label
-                                                    ui.label(
-                                                        egui::RichText::new(*source)
-                                                            .size(11.0)
-                                                            .color(Color32::from_rgb(215, 222, 232))
-                                                            .strong(),
-                                                    );
-                                                },
+                                    // 5-Segment LED Signal Bar on left
+                                    let meter_rect = Rect::from_min_size(
+                                        Pos2::new(src_rect.min.x + 8.0, src_rect.min.y + 5.0),
+                                        Vec2::new(6.0, 26.0),
+                                    );
+                                    render_segment_meter(p, meter_rect, level);
+
+                                    // Text: Tag + Name
+                                    let full_title = format!("{} {}", tag, name);
+                                    p.text(
+                                        Pos2::new(src_rect.min.x + 20.0, src_rect.center().y),
+                                        Align2::LEFT_CENTER,
+                                        full_title,
+                                        FontId::proportional(11.0),
+                                        Color32::from_rgb(220, 228, 238),
+                                    );
+
+                                    ui.add_space(col_gap);
+
+                                    // 2. Cross-point Sockets / Jacks
+                                    for (col_idx, _) in destinations.iter().enumerate() {
+                                        let is_connected = self.connections[row_idx][col_idx];
+                                        let (rect, response) = ui.allocate_exact_size(Vec2::new(cell_w, cell_h), egui::Sense::click());
+
+                                        if response.clicked() {
+                                            self.connections[row_idx][col_idx] = !is_connected;
+                                        }
+
+                                        let center = rect.center();
+                                        let is_hovered = response.hovered();
+
+                                        let p = ui.painter();
+
+                                        // Draw Jack Cell Plate
+                                        let cell_bg = if is_hovered {
+                                            Color32::from_rgb(36, 44, 56)
+                                        } else if is_connected {
+                                            Color32::from_rgb(26, 33, 44)
+                                        } else {
+                                            Color32::from_rgb(22, 26, 32)
+                                        };
+
+                                        p.rect_filled(rect, 3.0, cell_bg);
+                                        p.rect_stroke(
+                                            rect,
+                                            3.0,
+                                            Stroke::new(1.0, if is_connected { Color32::from_rgb(52, 76, 104) } else { Color32::from_rgb(38, 44, 54) }),
+                                            egui::StrokeKind::Inside,
+                                        );
+
+                                        // Physical Audio Jack / Plug Graphic
+                                        if is_connected {
+                                            // CONNECTED STATE: Highly Visible Illuminated Studio Patch Plug
+                                            let pulse = ((time * 4.0).sin() * 0.15 + 0.85) as f32;
+                                            let core_color = Color32::from_rgb(
+                                                (56.0 * pulse) as u8,
+                                                (189.0 * pulse) as u8,
+                                                (248.0 * pulse) as u8,
                                             );
 
-                                            ui.add_space(4.0);
+                                            // Cyan Glow Aura
+                                            p.circle_filled(center, 11.0, Color32::from_rgba_premultiplied(56, 189, 248, 50));
+                                            // Outer Jack Collar
+                                            p.circle_stroke(center, 8.0, Stroke::new(1.8, core_color));
+                                            // Center Plug Pin
+                                            p.circle_filled(center, 5.5, core_color);
+                                            // High-intensity center highlight
+                                            p.circle_filled(center, 2.0, Color32::WHITE);
+                                        } else {
+                                            // DISCONNECTED STATE: High-Contrast Brushed Metal Jack Socket
+                                            let bezel_color = if is_hovered {
+                                                Color32::from_rgb(140, 160, 190) // Bright highlight on hover
+                                            } else {
+                                                Color32::from_rgb(95, 112, 135) // High-contrast visible metal ring
+                                            };
 
-                                            // 2. Cross-point Sockets / Jacks
-                                            for (col_idx, _) in destinations.iter().enumerate() {
-                                                let is_connected = self.connections[row_idx][col_idx];
-                                                let (rect, response) = ui.allocate_exact_size(Vec2::new(col_w, 36.0), egui::Sense::click());
+                                            // Outer Metal Socket Bezel (Crisp & clearly visible)
+                                            p.circle_stroke(center, 7.5, Stroke::new(1.6, bezel_color));
+                                            // Recessed Socket Chamber
+                                            p.circle_filled(center, 5.5, Color32::from_rgb(14, 17, 22));
+                                            // Center Metal Contact Pin Hole (Solid silver dot)
+                                            p.circle_filled(center, 2.2, Color32::from_rgb(130, 148, 170));
+                                        }
 
-                                                if response.clicked() {
-                                                    self.connections[row_idx][col_idx] = !is_connected;
-                                                }
-
-                                                let center = rect.center();
-                                                let is_hovered = response.hovered();
-
-                                                // Draw Jack Cell Plate
-                                                let cell_bg = if is_hovered {
-                                                    Color32::from_rgb(34, 42, 54)
-                                                } else if is_connected {
-                                                    Color32::from_rgb(26, 33, 44)
-                                                } else {
-                                                    Color32::from_rgb(20, 24, 30)
-                                                };
-
-                                                ui.painter().rect_filled(rect.shrink(1.5), 3.0, cell_bg);
-                                                ui.painter().rect_stroke(
-                                                    rect.shrink(1.5),
-                                                    3.0,
-                                                    Stroke::new(1.0, if is_connected { Color32::from_rgb(46, 68, 92) } else { Color32::from_rgb(32, 38, 48) }),
-                                                    egui::StrokeKind::Inside,
-                                                );
-
-                                                // Draw Physical Audio Jack / Plug
-                                                if is_connected {
-                                                    // CONNECTED STATE: Illuminated Blue Patch Cable Plug
-                                                    let pulse = ((time * 4.0).sin() * 0.15 + 0.85) as f32;
-                                                    let core_color = Color32::from_rgb(
-                                                        (56.0 * pulse) as u8,
-                                                        (189.0 * pulse) as u8,
-                                                        (248.0 * pulse) as u8,
-                                                    );
-
-                                                    // Glow Halo
-                                                    ui.painter().circle_filled(center, 9.0, Color32::from_rgba_premultiplied(56, 189, 248, 35));
-                                                    // Metal Bezel Ring
-                                                    ui.painter().circle_stroke(center, 7.5, Stroke::new(1.5, core_color));
-                                                    // Center illuminated Pin
-                                                    ui.painter().circle_filled(center, 4.5, core_color);
-                                                    // Center White Reflection
-                                                    ui.painter().circle_filled(center, 1.5, Color32::WHITE);
-                                                } else {
-                                                    // DISCONNECTED STATE: Dark Recessed Socket Port
-                                                    let bezel_color = if is_hovered { Color32::from_rgb(90, 105, 128) } else { Color32::from_rgb(44, 52, 64) };
-                                                    // Outer Socket Ring
-                                                    ui.painter().circle_stroke(center, 6.5, Stroke::new(1.2, bezel_color));
-                                                    // Inner Dark Socket Hole
-                                                    ui.painter().circle_filled(center, 4.0, Color32::from_rgb(12, 14, 18));
-                                                    // Center socket hole
-                                                    ui.painter().circle_filled(center, 1.5, Color32::from_rgb(30, 36, 46));
-                                                }
-
-                                                ui.add_space(4.0);
-                                            }
-                                        });
-                                    });
+                                        ui.add_space(col_gap);
+                                    }
+                                });
 
                                 ui.add_space(4.0);
                             }
@@ -286,23 +302,23 @@ impl RoutingMatrix {
                             // Bottom Legend & Help Bar
                             ui.horizontal(|ui| {
                                 ui.colored_label(Color32::from_rgb(56, 189, 248), "●");
-                                ui.label(egui::RichText::new(tr("已连接音频通路", "Active Cable Patch")).size(10.5).color(Color32::from_rgb(170, 182, 198)));
+                                ui.label(egui::RichText::new(tr("已连接跳线", "Active Patch")).size(10.5).color(Color32::from_rgb(180, 192, 210)));
 
-                                ui.add_space(14.0);
-                                ui.colored_label(Color32::from_rgb(60, 72, 88), "○");
-                                ui.label(egui::RichText::new(tr("未连接空闲插口", "Unconnected Socket")).size(10.5).color(Color32::from_rgb(120, 130, 145)));
+                                ui.add_space(12.0);
+                                ui.colored_label(Color32::from_rgb(110, 128, 150), "○");
+                                ui.label(egui::RichText::new(tr("可用插口", "Available Socket")).size(10.5).color(Color32::from_rgb(140, 152, 168)));
 
                                 ui.add_space(14.0);
                                 ui.label(
                                     egui::RichText::new(tr("提示: 点击任意交叉点可立即插入或拔出虚拟音频跳线", "Tip: Click any intersection node to connect or disconnect patch routing."))
                                         .size(10.5)
-                                        .color(Color32::from_rgb(100, 110, 125)),
+                                        .color(Color32::from_rgb(110, 120, 135)),
                                 );
                             });
                         });
                     });
 
-                ui.add_space(10.0);
+                ui.add_space(gap_between_panels);
 
                 // ==========================================
                 // 2. RIGHT PANEL: ROUTING INSPECTOR & PRESETS
@@ -311,13 +327,12 @@ impl RoutingMatrix {
                     .fill(Color32::from_rgb(20, 23, 29))
                     .stroke(Stroke::new(1.0, Color32::from_rgb(38, 44, 56)))
                     .corner_radius(egui::CornerRadius::same(6))
-                    .inner_margin(14.0)
+                    .inner_margin(12.0)
                     .show(ui, |ui| {
                         ui.set_width(inspector_w);
-                        ui.set_min_height(avail_h);
 
                         ui.vertical(|ui| {
-                            ui.label(egui::RichText::new(tr("🎛️ 路由状态与控制台", "Routing Inspector & Controls")).strong().size(13.0).color(Color32::from_rgb(230, 236, 246)));
+                            ui.label(egui::RichText::new(tr("🎛️ 路由状态与控制台", "Routing Inspector & Controls")).strong().size(12.5).color(Color32::from_rgb(235, 240, 248)));
                             ui.add_space(6.0);
                             ui.separator();
                             ui.add_space(8.0);
@@ -334,7 +349,7 @@ impl RoutingMatrix {
                                 .fill(Color32::from_rgb(25, 30, 38))
                                 .corner_radius(egui::CornerRadius::same(4))
                                 .stroke(Stroke::new(1.0, Color32::from_rgb(42, 50, 64)))
-                                .inner_margin(10.0)
+                                .inner_margin(8.0)
                                 .show(ui, |ui| {
                                     ui.horizontal(|ui| {
                                         ui.label(egui::RichText::new(format!("{}", active_nodes)).strong().size(22.0).color(Color32::from_rgb(56, 189, 248)));
@@ -346,19 +361,19 @@ impl RoutingMatrix {
                                 });
 
                             ui.add_space(10.0);
-                            render_info_row(ui, tr("矩阵吞吐状态", "Throughput"), tr("零延迟直通 (0.0 ms)", "Zero Latency (0.0 ms)"));
-                            render_info_row(ui, tr("核心路由服务", "Router Engine"), tr("已激活 (Active)", "Online"));
-                            render_info_row(ui, tr("通道隔离保护", "Isolation"), tr("全通道立体声", "Discrete Stereo"));
+                            render_info_row(ui, tr("矩阵吞吐", "Throughput"), tr("零延迟 (0.0 ms)", "Zero Latency"));
+                            render_info_row(ui, tr("路由引擎", "Router Engine"), tr("已激活", "Online"));
+                            render_info_row(ui, tr("通道保护", "Isolation"), tr("全独立立体声", "Discrete Stereo"));
 
-                            ui.add_space(14.0);
-                            ui.label(egui::RichText::new(tr("一键跳线应用场景预设", "One-Click Presets")).strong().size(11.5).color(Color32::from_rgb(180, 192, 210)));
+                            ui.add_space(12.0);
+                            ui.label(egui::RichText::new(tr("一键跳线场景预设", "One-Click Presets")).strong().size(11.0).color(Color32::from_rgb(180, 192, 210)));
                             ui.add_space(6.0);
 
                             // Preset Buttons
                             render_preset_card(
                                 ui,
                                 tr("🎙️ 网络直播标准模式", "🎙️ Live Stream Standard"),
-                                tr("人声+DAW 混音送往 OBS 直播流与主监听", "Mix Mic & DAW to OBS & Monitors"),
+                                tr("人声+DAW 混音送往 OBS 与监听", "Mix Mic & DAW to OBS & Monitors"),
                                 || self.apply_broadcast_preset(),
                             );
                             ui.add_space(4.0);
@@ -366,7 +381,7 @@ impl RoutingMatrix {
                             render_preset_card(
                                 ui,
                                 tr("🎧 专业录音监听模式", "🎧 Studio Tracking Studio"),
-                                tr("人声与乐器直接送至监听耳机与宿主", "Direct Mic & Inst to Headphones"),
+                                tr("人声与乐器直接送至监听与宿主", "Direct Mic & Inst to Headphones"),
                                 || self.apply_studio_preset(),
                             );
                             ui.add_space(4.0);
@@ -374,19 +389,19 @@ impl RoutingMatrix {
                             render_preset_card(
                                 ui,
                                 tr("🎮 连麦游戏通话模式", "🎮 Discord / Gaming Voice"),
-                                tr("游戏背景音送耳机，语音通道独立分流", "Separate Game Audio & Discord Mic"),
+                                tr("游戏声送耳机，语音独立分流", "Separate Game Audio & Discord Mic"),
                                 || self.apply_gaming_preset(),
                             );
 
-                            ui.add_space(14.0);
+                            ui.add_space(12.0);
                             ui.separator();
-                            ui.add_space(10.0);
+                            ui.add_space(8.0);
 
-                            ui.checkbox(&mut self.direct_monitoring, tr("启用硬件零延迟监听 (Direct ASIO)", "Direct ASIO Monitoring"));
+                            ui.checkbox(&mut self.direct_monitoring, tr("启用硬件零延迟监听", "Direct ASIO Monitoring"));
                             ui.add_space(2.0);
                             ui.label(
-                                egui::RichText::new(tr("绕开 Windows WDM 音频混音器，以声卡原生极低延迟实现输入直通。", "Bypass OS mixer for true hardware zero-latency monitoring."))
-                                    .size(10.0)
+                                egui::RichText::new(tr("绕开 Windows 混音器，声卡原生超低延迟直通。", "Bypass OS mixer for true zero-latency monitoring."))
+                                    .size(9.5)
                                     .color(Color32::from_rgb(110, 120, 135)),
                             );
                         });
@@ -437,9 +452,7 @@ impl RoutingMatrix {
     }
 }
 
-fn render_segment_meter(ui: &mut Ui, level: f32) {
-    let (rect, _) = ui.allocate_exact_size(Vec2::new(6.0, 26.0), egui::Sense::hover());
-    let p = ui.painter();
+fn render_segment_meter(p: &egui::Painter, rect: Rect, level: f32) {
     p.rect_filled(rect, 1.0, Color32::from_rgb(16, 18, 22));
 
     let segments = 5;
