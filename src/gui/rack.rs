@@ -37,13 +37,13 @@ impl Default for VirtualRack {
                 ChannelStrip {
                     name_zh: "宿主 DAW / 合成器",
                     name_en: "DAW / SYNTH",
-                    volume_db: -2.5,
+                    volume_db: -2.0,
                     pan: 0.0,
                     mute: false,
                     solo: false,
                     fx_slots: vec![("Pro-Q 3", true), ("Sidechain", true), ("Stereo Imager", false), ("Tape Sat", true)],
-                    current_peak_l: 0.82,
-                    current_peak_r: 0.84,
+                    current_peak_l: 0.80,
+                    current_peak_r: 0.82,
                 },
                 ChannelStrip {
                     name_zh: "背景音乐 / 媒体",
@@ -53,19 +53,19 @@ impl Default for VirtualRack {
                     mute: false,
                     solo: false,
                     fx_slots: vec![("Ducking", true), ("Warm EQ", false), ("Peak Limiter", true)],
-                    current_peak_l: 0.55,
-                    current_peak_r: 0.58,
+                    current_peak_l: 0.52,
+                    current_peak_r: 0.55,
                 },
                 ChannelStrip {
                     name_zh: "语音通话 / 连麦",
-                    name_en: "VOICE / DISCORD",
+                    name_en: "VOICE / CHAT",
                     volume_db: -1.0,
                     pan: 0.0,
                     mute: false,
                     solo: false,
                     fx_slots: vec![("Noise Gate", true), ("Vocal Leveller", true), ("Output EQ", false)],
-                    current_peak_l: 0.48,
-                    current_peak_r: 0.45,
+                    current_peak_l: 0.45,
+                    current_peak_r: 0.42,
                 },
                 ChannelStrip {
                     name_zh: "主输出总线 MASTER",
@@ -75,8 +75,8 @@ impl Default for VirtualRack {
                     mute: false,
                     solo: false,
                     fx_slots: vec![("Bus Glue", true), ("True Peak Limiter", true), ("Loudness LUFS", true)],
-                    current_peak_l: 0.88,
-                    current_peak_r: 0.89,
+                    current_peak_l: 0.85,
+                    current_peak_r: 0.86,
                 },
             ],
         }
@@ -85,15 +85,25 @@ impl Default for VirtualRack {
 
 impl VirtualRack {
     pub fn render(&mut self, ui: &mut Ui, time: f64) {
+        let avail_w = ui.available_width();
+        let avail_h = (ui.available_height() - 10.0).max(420.0);
+
         ui.vertical(|ui| {
+            // Header Row
             ui.horizontal(|ui| {
                 ui.heading(
-                    egui::RichText::new(tr("🎚️ 虚拟效果机架与通道条", "🎚️ Virtual Rack & Channel Strips"))
-                        .color(Color32::from_rgb(0, 220, 255))
+                    egui::RichText::new(tr("虚拟机架调音台", "Virtual Console Rack"))
+                        .color(Color32::from_rgb(230, 236, 244))
                         .strong(),
                 );
+                ui.label(
+                    egui::RichText::new(tr("(插入式效果器、高精度推子与立体声峰值表)", "(Insert Processing, dB Faders & Stereo Peak Meters)"))
+                        .color(Color32::from_rgb(120, 130, 145))
+                        .small(),
+                );
+
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button(tr("重置所有推子", "Reset All Faders")).clicked() {
+                    if ui.button(egui::RichText::new(tr("重置推子", "Reset Faders")).size(11.0)).clicked() {
                         for ch in &mut self.channels {
                             ch.volume_db = 0.0;
                             ch.pan = 0.0;
@@ -105,24 +115,23 @@ impl VirtualRack {
             });
 
             ui.add_space(8.0);
-            ui.label(
-                egui::RichText::new(tr(
-                    "专业调音台通道条，支持插入式效果器、高精度 dB 推子、声像平衡及立体声峰值电平表。",
-                    "Live mixing console with insert processing slots, high-precision dB faders, and stereo peak meter monitoring."
-                ))
-                .color(Color32::from_rgb(160, 175, 195))
-                .small(),
-            );
-            ui.add_space(10.0);
 
-            // Horizontal strip layout
+            // Responsive Horizontal Channel Strips (Expands to fill 100% width)
+            let channel_count = self.channels.len() as f32;
+            let spacing = 12.0;
+            let total_spacing = spacing * (channel_count - 1.0);
+            let strip_width = ((avail_w - total_spacing) / channel_count).max(180.0);
+
+            let total_channels = self.channels.len();
             egui::ScrollArea::horizontal()
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
                     ui.horizontal(|ui| {
                         for (idx, ch) in self.channels.iter_mut().enumerate() {
-                            render_channel_strip(ui, ch, idx, time);
-                            ui.add_space(10.0);
+                            render_channel_strip(ui, ch, idx, strip_width, avail_h, time);
+                            if idx + 1 < total_channels {
+                                ui.add_space(spacing);
+                            }
                         }
                     });
                 });
@@ -130,161 +139,194 @@ impl VirtualRack {
     }
 }
 
-fn render_channel_strip(ui: &mut Ui, ch: &mut ChannelStrip, idx: usize, time: f64) {
+fn render_channel_strip(
+    ui: &mut Ui,
+    ch: &mut ChannelStrip,
+    idx: usize,
+    width: f32,
+    height: f32,
+    time: f64,
+) {
+    let is_master = idx == 4;
+
     egui::Frame::NONE
-        .fill(Color32::from_rgb(18, 22, 28))
-        .stroke(Stroke::new(1.0, Color32::from_rgb(38, 46, 58)))
-        .corner_radius(6.0)
-        .inner_margin(10.0)
+        .fill(if is_master { Color32::from_rgb(25, 30, 38) } else { Color32::from_rgb(22, 25, 31) })
+        .stroke(Stroke::new(1.0, if is_master { Color32::from_rgb(56, 189, 248) } else { Color32::from_rgb(38, 44, 54) }))
+        .corner_radius(egui::CornerRadius::same(6))
+        .inner_margin(12.0)
         .show(ui, |ui| {
-            ui.set_width(170.0);
+            ui.set_width(width);
+            ui.set_min_height(height);
+
             ui.vertical_centered(|ui| {
-                // Header Name
-                let header_color = if idx == 4 {
-                    Color32::from_rgb(255, 170, 0) // Master
-                } else {
-                    Color32::from_rgb(0, 220, 255)
-                };
+                // Channel Tag
+                let channel_no = format!("{:02}", idx + 1);
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new(channel_no).monospace().size(10.0).color(Color32::from_rgb(110, 120, 135)));
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if is_master {
+                            ui.label(egui::RichText::new("MAIN").size(9.0).strong().color(Color32::from_rgb(56, 189, 248)));
+                        }
+                    });
+                });
+
+                // Channel Name
                 let display_name = tr(ch.name_zh, ch.name_en);
                 ui.label(
                     egui::RichText::new(display_name)
-                        .color(header_color)
+                        .color(if is_master { Color32::from_rgb(56, 189, 248) } else { Color32::from_rgb(220, 228, 238) })
                         .strong()
-                        .size(13.0),
+                        .size(12.0),
                 );
-                ui.add_space(4.0);
 
-                // Insert FX Slots
+                ui.add_space(6.0);
+                ui.separator();
+                ui.add_space(6.0);
+
+                // Insert FX Slots List
                 egui::Frame::NONE
-                    .fill(Color32::from_rgb(13, 16, 21))
-                    .corner_radius(4.0)
+                    .fill(Color32::from_rgb(16, 18, 22))
+                    .corner_radius(egui::CornerRadius::same(4))
                     .inner_margin(6.0)
                     .show(ui, |ui| {
-                        ui.set_width(150.0);
-                        for (fx_name, enabled) in &mut ch.fx_slots {
-                            let slot_color = if *enabled {
-                                Color32::from_rgb(0, 230, 180)
-                            } else {
-                                Color32::from_rgb(90, 100, 115)
-                            };
-                            let btn = egui::Button::new(
-                                egui::RichText::new(*fx_name).size(10.0).color(slot_color),
-                            )
-                            .fill(if *enabled {
-                                Color32::from_rgb(24, 34, 42)
-                            } else {
-                                Color32::from_rgb(18, 22, 28)
+                        ui.set_width(width - 12.0);
+                        for (fx_name, active) in ch.fx_slots.iter_mut() {
+                            ui.horizontal(|ui| {
+                                let dot_color = if *active {
+                                    Color32::from_rgb(56, 189, 248)
+                                } else {
+                                    Color32::from_rgb(60, 68, 80)
+                                };
+                                if ui.button(egui::RichText::new("●").size(9.0).color(dot_color)).clicked() {
+                                    *active = !*active;
+                                }
+
+                                ui.label(
+                                    egui::RichText::new(*fx_name)
+                                        .size(10.5)
+                                        .color(if *active { Color32::from_rgb(200, 210, 225) } else { Color32::from_rgb(90, 100, 115) }),
+                                );
                             });
-                            if ui.add(btn).clicked() {
-                                *enabled = !*enabled;
-                            }
+                            ui.add_space(1.0);
                         }
                     });
 
                 ui.add_space(8.0);
 
-                // Pan knob / slider
+                // Pan Slider
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new(tr("声像", "Pan")).size(10.0).color(Color32::GRAY));
+                    ui.label(egui::RichText::new("L").size(9.0).color(Color32::from_rgb(110, 120, 135)));
                     ui.add(egui::Slider::new(&mut ch.pan, -1.0..=1.0).show_value(false));
+                    ui.label(egui::RichText::new("R").size(9.0).color(Color32::from_rgb(110, 120, 135)));
+                });
+
+                ui.add_space(6.0);
+
+                // Mute & Solo Buttons
+                ui.horizontal(|ui| {
+                    let m_btn = egui::Button::new(
+                        egui::RichText::new("M")
+                            .strong()
+                            .size(11.0)
+                            .color(if ch.mute { Color32::WHITE } else { Color32::from_rgb(160, 170, 185) }),
+                    )
+                    .fill(if ch.mute { Color32::from_rgb(220, 38, 38) } else { Color32::from_rgb(30, 35, 44) })
+                    .stroke(Stroke::new(1.0, Color32::from_rgb(46, 54, 66)))
+                    .corner_radius(egui::CornerRadius::same(3));
+
+                    if ui.add_sized([((width - 40.0) / 2.0).max(30.0), 22.0], m_btn).clicked() {
+                        ch.mute = !ch.mute;
+                    }
+
+                    let s_btn = egui::Button::new(
+                        egui::RichText::new("S")
+                            .strong()
+                            .size(11.0)
+                            .color(if ch.solo { Color32::BLACK } else { Color32::from_rgb(160, 170, 185) }),
+                    )
+                    .fill(if ch.solo { Color32::from_rgb(245, 158, 11) } else { Color32::from_rgb(30, 35, 44) })
+                    .stroke(Stroke::new(1.0, Color32::from_rgb(46, 54, 66)))
+                    .corner_radius(egui::CornerRadius::same(3));
+
+                    if ui.add_sized([((width - 40.0) / 2.0).max(30.0), 22.0], s_btn).clicked() {
+                        ch.solo = !ch.solo;
+                    }
                 });
 
                 ui.add_space(8.0);
 
-                // Fader and Meters Side-by-Side
+                // Main Fader & Stereo Peak VU Meters
+                let fader_height = 140.0;
                 ui.horizontal(|ui| {
-                    // Vertical Fader
-                    ui.vertical(|ui| {
-                        ui.add(
-                            egui::Slider::new(&mut ch.volume_db, -60.0..=6.0)
-                                .vertical()
-                                .show_value(false),
-                        );
-                        let db_text = if ch.volume_db <= -59.0 {
-                            "-inf dB".to_string()
-                        } else {
-                            format!("{:+.1} dB", ch.volume_db)
-                        };
-                        ui.label(
-                            egui::RichText::new(db_text)
-                                .size(10.0)
-                                .color(Color32::from_rgb(180, 195, 215)),
-                        );
-                    });
+                    // Vertical dB Fader
+                    ui.add_sized(
+                        [36.0, fader_height],
+                        egui::Slider::new(&mut ch.volume_db, -60.0..=12.0)
+                            .vertical()
+                            .show_value(false),
+                    );
 
                     ui.add_space(8.0);
 
                     // Dual Stereo VU Meters
-                    let (meter_rect, _) = ui.allocate_exact_size(Vec2::new(16.0, 130.0), egui::Sense::hover());
-                    let p = ui.painter();
-                    p.rect_filled(meter_rect, 2.0, Color32::from_rgb(10, 12, 16));
+                    let (vu_rect, _) = ui.allocate_exact_size(Vec2::new(18.0, fader_height), egui::Sense::hover());
 
-                    // Animated wave level
-                    let jitter = (time * 6.0 + (idx as f64 * 1.5)).sin() as f32 * 0.12;
-                    let level_l = if ch.mute { 0.0 } else { (ch.current_peak_l + jitter).clamp(0.02, 0.98) };
-                    let level_r = if ch.mute { 0.0 } else { (ch.current_peak_r + jitter * 0.9).clamp(0.02, 0.98) };
+                    let sim_l = if ch.mute { 0.0 } else {
+                        (ch.current_peak_l + (time * 4.0 + (idx as f64)).sin() as f32 * 0.15).clamp(0.02, 0.96)
+                    };
+                    let sim_r = if ch.mute { 0.0 } else {
+                        (ch.current_peak_r + (time * 4.2 + (idx as f64) + 1.0).sin() as f32 * 0.15).clamp(0.02, 0.96)
+                    };
 
-                    // Left channel meter
-                    render_meter_bar(&p, meter_rect.min.x, meter_rect.max.y, 7.0, meter_rect.height(), level_l);
-                    // Right channel meter
-                    render_meter_bar(&p, meter_rect.min.x + 8.5, meter_rect.max.y, 7.0, meter_rect.height(), level_r);
+                    render_stereo_meter(ui, vu_rect, sim_l, sim_r);
                 });
 
-                ui.add_space(8.0);
+                ui.add_space(6.0);
 
-                // Mute and Solo buttons
-                ui.horizontal(|ui| {
-                    let mute_btn = egui::Button::new(
-                        egui::RichText::new("M")
-                            .strong()
-                            .color(if ch.mute { Color32::WHITE } else { Color32::GRAY }),
-                    )
-                    .fill(if ch.mute { Color32::from_rgb(220, 40, 40) } else { Color32::from_rgb(28, 34, 42) });
-                    if ui.add_sized([34.0, 24.0], mute_btn).clicked() {
-                        ch.mute = !ch.mute;
-                    }
+                // Numerical dB label
+                let val_text = if ch.volume_db <= -59.0 {
+                    "-inf dB".to_string()
+                } else {
+                    format!("{:+.1} dB", ch.volume_db)
+                };
 
-                    let solo_btn = egui::Button::new(
-                        egui::RichText::new("S")
-                            .strong()
-                            .color(if ch.solo { Color32::BLACK } else { Color32::GRAY }),
-                    )
-                    .fill(if ch.solo { Color32::from_rgb(255, 200, 0) } else { Color32::from_rgb(28, 34, 42) });
-                    if ui.add_sized([34.0, 24.0], solo_btn).clicked() {
-                        ch.solo = !ch.solo;
-                    }
-                });
+                egui::Frame::NONE
+                    .fill(Color32::from_rgb(16, 18, 22))
+                    .corner_radius(egui::CornerRadius::same(3))
+                    .inner_margin(egui::Margin::symmetric(6, 2))
+                    .show(ui, |ui| {
+                        ui.label(egui::RichText::new(val_text).monospace().size(11.0).color(Color32::from_rgb(56, 189, 248)));
+                    });
             });
         });
 }
 
-fn render_meter_bar(p: &egui::Painter, x: f32, bottom_y: f32, width: f32, height: f32, level: f32) {
-    let filled_h = height * level;
-    let green_h = (height * 0.65).min(filled_h);
-    let yellow_h = if filled_h > height * 0.65 { (height * 0.85 - height * 0.65).min(filled_h - height * 0.65) } else { 0.0 };
-    let red_h = if filled_h > height * 0.85 { filled_h - height * 0.85 } else { 0.0 };
+fn render_stereo_meter(ui: &Ui, rect: Rect, level_l: f32, level_r: f32) {
+    let p = ui.painter();
+    p.rect_filled(rect, 2.0, Color32::from_rgb(16, 18, 22));
 
-    if green_h > 0.0 {
-        p.rect_filled(
-            Rect::from_min_max(Pos2::new(x, bottom_y - green_h), Pos2::new(x + width, bottom_y)),
-            1.0,
-            Color32::from_rgb(0, 230, 100),
-        );
-    }
-    if yellow_h > 0.0 {
-        let base_y = bottom_y - height * 0.65;
-        p.rect_filled(
-            Rect::from_min_max(Pos2::new(x, base_y - yellow_h), Pos2::new(x + width, base_y)),
-            1.0,
-            Color32::from_rgb(255, 210, 0),
-        );
-    }
-    if red_h > 0.0 {
-        let base_y = bottom_y - height * 0.85;
-        p.rect_filled(
-            Rect::from_min_max(Pos2::new(x, base_y - red_h), Pos2::new(x + width, base_y)),
-            1.0,
-            Color32::from_rgb(255, 50, 50),
-        );
-    }
+    let bar_w = (rect.width() - 4.0) / 2.0;
+    let rect_l = Rect::from_min_size(rect.min + Vec2::new(1.0, 0.0), Vec2::new(bar_w, rect.height()));
+    let rect_r = Rect::from_min_size(rect.min + Vec2::new(bar_w + 3.0, 0.0), Vec2::new(bar_w, rect.height()));
+
+    render_meter_channel(p, rect_l, level_l);
+    render_meter_channel(p, rect_r, level_r);
+}
+
+fn render_meter_channel(p: &egui::Painter, rect: Rect, level: f32) {
+    let filled_h = rect.height() * level;
+    let active_rect = Rect::from_min_max(
+        Pos2::new(rect.min.x, rect.max.y - filled_h),
+        rect.max,
+    );
+
+    let color = if level > 0.88 {
+        Color32::from_rgb(248, 113, 113) // Peak red
+    } else if level > 0.70 {
+        Color32::from_rgb(245, 158, 11) // Amber
+    } else {
+        Color32::from_rgb(52, 211, 153) // Subtle emerald
+    };
+
+    p.rect_filled(active_rect, 1.0, color);
 }

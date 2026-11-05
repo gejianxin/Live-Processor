@@ -4,9 +4,7 @@ use std::path::Path;
 #[cfg(windows)]
 use anyhow::{bail, Context};
 #[cfg(windows)]
-use std::process::Command;
-#[cfg(windows)]
-use crate::config::is_64bit_os;
+use crate::config::{is_64bit_os, silent_command};
 
 #[allow(dead_code)]
 #[derive(Debug, PartialEq, Eq)]
@@ -57,7 +55,7 @@ pub fn install_driver(app_dir: &Path) -> Result<DriverInstallResult> {
             );
         }
 
-        let status = Command::new(&installer_exe)
+        let status = silent_command(&installer_exe)
             .arg("install")
             .current_dir(&working_dir)
             .status()
@@ -89,7 +87,7 @@ pub fn uninstall_driver(app_dir: &Path) -> Result<DriverUninstallResult> {
             return Ok(DriverUninstallResult::Success);
         }
 
-        let status = Command::new(&installer_exe)
+        let status = silent_command(&installer_exe)
             .arg("uninstall")
             .current_dir(&working_dir)
             .status()
@@ -114,7 +112,7 @@ pub fn uninstall_driver(app_dir: &Path) -> Result<DriverUninstallResult> {
 pub fn query_driver_service_status() -> Option<String> {
     #[cfg(windows)]
     {
-        let output = Command::new("sc")
+        let output = silent_command("sc")
             .args(["query", "asiovadpro"])
             .output()
             .ok()?;

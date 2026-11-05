@@ -5,9 +5,7 @@ use anyhow::{bail, Context};
 #[cfg(windows)]
 use std::fs;
 #[cfg(windows)]
-use std::process::Command;
-#[cfg(windows)]
-use crate::config::REGISTRY_FIX_TASK_NAME;
+use crate::config::{silent_command, REGISTRY_FIX_TASK_NAME};
 
 #[cfg(windows)]
 pub fn generate_task_xml() -> String {
@@ -87,7 +85,7 @@ pub fn install_registry_fix_task() -> Result<()> {
         fs::write(&xml_path, generate_task_xml())
             .with_context(|| format!("Failed to write task XML to {}", xml_path.display()))?;
 
-        let output = Command::new("schtasks")
+        let output = silent_command("schtasks")
             .args([
                 "/Create",
                 "/TN",
@@ -118,7 +116,7 @@ pub fn install_registry_fix_task() -> Result<()> {
 pub fn verify_registry_fix_task() -> bool {
     #[cfg(windows)]
     {
-        let output = Command::new("schtasks")
+        let output = silent_command("schtasks")
             .args(["/Query", "/TN", REGISTRY_FIX_TASK_NAME])
             .output();
 
@@ -137,7 +135,7 @@ pub fn verify_registry_fix_task() -> bool {
 pub fn remove_registry_fix_task() -> Result<()> {
     #[cfg(windows)]
     {
-        let _ = Command::new("schtasks")
+        let _ = silent_command("schtasks")
             .args(["/Delete", "/TN", REGISTRY_FIX_TASK_NAME, "/F"])
             .output();
     }

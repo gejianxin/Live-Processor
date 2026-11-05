@@ -9,9 +9,9 @@ use anyhow::Result;
 pub fn run_gui() -> Result<()> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([1140.0, 740.0])
-            .with_min_inner_size([960.0, 620.0])
-            .with_title("Live-Processor Pro - Audio Processing & Supervisor"),
+            .with_inner_size([1180.0, 760.0])
+            .with_min_inner_size([960.0, 640.0])
+            .with_title("Live-Processor Pro"),
         ..Default::default()
     };
 
@@ -19,7 +19,6 @@ pub fn run_gui() -> Result<()> {
         "Live-Processor Pro",
         options,
         Box::new(|cc| {
-            // Apply professional dark audio console theme
             configure_audio_theme(&cc.egui_ctx);
             Ok(Box::new(app::LiveProcessorApp::new()))
         }),
@@ -29,20 +28,37 @@ pub fn run_gui() -> Result<()> {
 
 fn configure_audio_theme(ctx: &egui::Context) {
     let mut visuals = egui::Visuals::dark();
-    visuals.override_text_color = Some(egui::Color32::from_rgb(220, 225, 235));
-    visuals.panel_fill = egui::Color32::from_rgb(18, 21, 26);
-    visuals.window_fill = egui::Color32::from_rgb(22, 26, 32);
-    visuals.widgets.noninteractive.bg_fill = egui::Color32::from_rgb(24, 28, 36);
-    visuals.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(40, 46, 58));
 
-    visuals.widgets.inactive.bg_fill = egui::Color32::from_rgb(30, 36, 46);
-    visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(50, 58, 72));
+    // Minimalist Studio Palette
+    let bg_canvas = egui::Color32::from_rgb(18, 20, 24);
+    let bg_surface = egui::Color32::from_rgb(25, 29, 35);
+    let bg_widget = egui::Color32::from_rgb(32, 37, 46);
+    let border_subtle = egui::Color32::from_rgb(44, 52, 64);
+    let text_primary = egui::Color32::from_rgb(230, 236, 244);
+    let accent_teal = egui::Color32::from_rgb(56, 189, 248);
 
-    visuals.widgets.hovered.bg_fill = egui::Color32::from_rgb(42, 50, 65);
-    visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.5, egui::Color32::from_rgb(0, 210, 255));
+    visuals.override_text_color = Some(text_primary);
+    visuals.panel_fill = bg_canvas;
+    visuals.window_fill = bg_surface;
 
-    visuals.widgets.active.bg_fill = egui::Color32::from_rgb(0, 160, 210);
-    visuals.widgets.active.bg_stroke = egui::Stroke::new(1.5, egui::Color32::from_rgb(0, 240, 255));
+    visuals.widgets.noninteractive.bg_fill = bg_surface;
+    visuals.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, border_subtle);
+    visuals.widgets.noninteractive.corner_radius = egui::CornerRadius::same(4);
+
+    visuals.widgets.inactive.bg_fill = bg_widget;
+    visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, border_subtle);
+    visuals.widgets.inactive.corner_radius = egui::CornerRadius::same(4);
+
+    visuals.widgets.hovered.bg_fill = egui::Color32::from_rgb(40, 48, 60);
+    visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0, accent_teal);
+    visuals.widgets.hovered.corner_radius = egui::CornerRadius::same(4);
+
+    visuals.widgets.active.bg_fill = egui::Color32::from_rgb(28, 54, 78);
+    visuals.widgets.active.bg_stroke = egui::Stroke::new(1.0, accent_teal);
+    visuals.widgets.active.corner_radius = egui::CornerRadius::same(4);
+
+    visuals.widgets.open.bg_fill = egui::Color32::from_rgb(34, 40, 50);
+    visuals.widgets.open.bg_stroke = egui::Stroke::new(1.0, border_subtle);
 
     ctx.set_visuals(visuals);
 }

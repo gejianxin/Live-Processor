@@ -47,26 +47,31 @@ impl LiveProcessorApp {
 impl eframe::App for LiveProcessorApp {
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
         let time = ui.ctx().input(|i| i.time);
-        ui.ctx().request_repaint_after(std::time::Duration::from_millis(16));
+        ui.ctx().request_repaint_after(std::time::Duration::from_millis(30));
 
-        // 1. Top Control Header
+        let avail_w = ui.available_width();
+
+        // 1. Sleek Minimalist Top Header
         egui::Frame::NONE
-            .fill(Color32::from_rgb(14, 16, 21))
-            .stroke(Stroke::new(1.0, Color32::from_rgb(32, 38, 48)))
-            .inner_margin(12.0)
+            .fill(Color32::from_rgb(20, 23, 28))
+            .stroke(Stroke::new(1.0, Color32::from_rgb(36, 42, 52)))
+            .inner_margin(egui::Margin::symmetric(14, 10))
             .show(ui, |ui| {
+                ui.set_width(avail_w);
                 self.render_header(ui, time);
             });
 
-        ui.add_space(6.0);
+        ui.add_space(4.0);
 
-        // 2. Central Workspace Area
-        let available_space = ui.available_height() - 36.0;
+        // 2. Central Full-Screen Workspace Area
+        let available_space = (ui.available_height() - 34.0).max(200.0);
         egui::Frame::NONE
-            .fill(Color32::from_rgb(18, 22, 28))
-            .inner_margin(16.0)
+            .fill(Color32::from_rgb(18, 20, 24))
+            .inner_margin(12.0)
             .show(ui, |ui| {
-                ui.set_min_height(available_space.max(200.0));
+                ui.set_width(avail_w);
+                ui.set_min_height(available_space);
+
                 match self.active_tab {
                     ActiveTab::Matrix => self.matrix.render(ui, time),
                     ActiveTab::Rack => self.rack.render(ui, time),
@@ -75,14 +80,15 @@ impl eframe::App for LiveProcessorApp {
                 }
             });
 
-        ui.add_space(6.0);
+        ui.add_space(2.0);
 
-        // 3. Bottom Status Bar
+        // 3. Bottom Minimalist Status Bar
         egui::Frame::NONE
-            .fill(Color32::from_rgb(12, 14, 18))
-            .stroke(Stroke::new(1.0, Color32::from_rgb(28, 32, 42)))
-            .inner_margin(8.0)
+            .fill(Color32::from_rgb(15, 17, 21))
+            .stroke(Stroke::new(1.0, Color32::from_rgb(30, 35, 44)))
+            .inner_margin(egui::Margin::symmetric(12, 6))
             .show(ui, |ui| {
+                ui.set_width(avail_w);
                 self.render_status_bar(ui);
             });
     }
@@ -91,15 +97,15 @@ impl eframe::App for LiveProcessorApp {
 impl LiveProcessorApp {
     fn render_header(&mut self, ui: &mut Ui, time: f64) {
         ui.horizontal(|ui| {
-            // Animated Pulse Dot
-            let pulse = ((time * 4.0).sin() * 0.2 + 0.8) as f32;
+            // Heartbeat indicator & Logo
+            let pulse = ((time * 3.0).sin() * 0.15 + 0.85) as f32;
             let dot_color = if self.panic_muted {
-                Color32::from_rgb(255, 60, 60)
+                Color32::from_rgb(248, 113, 113)
             } else {
                 Color32::from_rgb(
-                    (0.0 * pulse) as u8,
-                    (240.0 * pulse) as u8,
-                    (255.0 * pulse) as u8,
+                    (56.0 * pulse) as u8,
+                    (189.0 * pulse) as u8,
+                    (248.0 * pulse) as u8,
                 )
             };
 
@@ -107,74 +113,82 @@ impl LiveProcessorApp {
             ui.label(
                 egui::RichText::new("LIVE-PROCESSOR")
                     .strong()
-                    .size(16.0)
-                    .color(Color32::from_rgb(240, 245, 255)),
+                    .size(14.0)
+                    .color(Color32::from_rgb(230, 236, 244)),
             );
-            ui.label(
-                egui::RichText::new("PRO")
-                    .size(10.0)
-                    .color(Color32::from_rgb(0, 210, 255))
-                    .background_color(Color32::from_rgb(20, 36, 48)),
-            );
+            egui::Frame::NONE
+                .fill(Color32::from_rgb(28, 36, 48))
+                .corner_radius(egui::CornerRadius::same(3))
+                .inner_margin(egui::Margin::symmetric(4, 1))
+                .show(ui, |ui| {
+                    ui.label(
+                        egui::RichText::new("PRO")
+                            .size(9.0)
+                            .strong()
+                            .color(Color32::from_rgb(56, 189, 248)),
+                    );
+                });
 
-            ui.add_space(20.0);
+            ui.add_space(16.0);
 
-            // Tab Navigation Buttons (Localized)
-            render_nav_tab(ui, &mut self.active_tab, ActiveTab::Matrix, tr("🎛️ 跳线矩阵", "🎛️ Wire Matrix"));
-            render_nav_tab(ui, &mut self.active_tab, ActiveTab::Rack, tr("🎚️ 虚拟机架", "🎚️ Virtual Rack"));
-            render_nav_tab(ui, &mut self.active_tab, ActiveTab::Supervisor, tr("🛡️ 驱动与守护", "🛡️ Driver Supervisor"));
-            render_nav_tab(ui, &mut self.active_tab, ActiveTab::Snapshots, tr("💾 现场快照", "💾 Show Cues"));
+            // Tab Navigation Switcher (Minimalist segmented style)
+            render_nav_tab(ui, &mut self.active_tab, ActiveTab::Matrix, tr("跳线矩阵", "Wire Matrix"));
+            render_nav_tab(ui, &mut self.active_tab, ActiveTab::Rack, tr("虚拟机架", "Virtual Rack"));
+            render_nav_tab(ui, &mut self.active_tab, ActiveTab::Supervisor, tr("驱动与守护", "Supervisor"));
+            render_nav_tab(ui, &mut self.active_tab, ActiveTab::Snapshots, tr("现场快照", "Show Cues"));
 
-            // Right-aligned audio telemetry & controls
+            // Right-aligned audio controls
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                // Language Switcher Toggle Button
+                // Language Switcher Button
                 let lang_label = match Language::current() {
                     Language::Chinese => "🌐 简体中文",
                     Language::English => "🌐 English",
                 };
-                if ui.button(egui::RichText::new(lang_label).size(11.0).color(Color32::from_rgb(180, 210, 245))).clicked() {
+                if ui.button(egui::RichText::new(lang_label).size(11.0).color(Color32::from_rgb(180, 192, 210))).clicked() {
                     Language::toggle();
                 }
 
-                ui.add_space(8.0);
+                ui.add_space(10.0);
 
                 // Panic Button
                 let panic_text = if self.panic_muted {
-                    tr("已紧急静音 (PANIC)", "MUTED (PANIC)")
+                    tr("已紧急静音", "PANIC MUTED")
                 } else {
                     tr("紧急静音", "PANIC")
                 };
                 let panic_btn = egui::Button::new(
                     egui::RichText::new(panic_text)
                         .strong()
-                        .color(Color32::WHITE),
+                        .size(11.0)
+                        .color(if self.panic_muted { Color32::WHITE } else { Color32::from_rgb(248, 113, 113) }),
                 )
                 .fill(if self.panic_muted {
-                    Color32::from_rgb(220, 30, 30)
+                    Color32::from_rgb(185, 28, 28)
                 } else {
-                    Color32::from_rgb(45, 52, 66)
-                });
+                    Color32::from_rgb(36, 26, 28)
+                })
+                .stroke(Stroke::new(1.0, if self.panic_muted { Color32::from_rgb(239, 68, 68) } else { Color32::from_rgb(76, 36, 40) }));
 
                 if ui.add(panic_btn).clicked() {
                     self.panic_muted = !self.panic_muted;
                 }
 
-                ui.add_space(8.0);
+                ui.add_space(10.0);
 
-                // Master Volume
+                // Master Volume Slider
+                ui.label(egui::RichText::new(format!("{:+.1} dB", self.master_volume)).size(11.0).monospace().color(Color32::from_rgb(56, 189, 248)));
                 ui.add(egui::Slider::new(&mut self.master_volume, -40.0..=6.0).show_value(false));
-                ui.label(egui::RichText::new(format!("{:+.1} dB", self.master_volume)).size(11.0).color(Color32::from_rgb(0, 220, 255)));
-                ui.label(egui::RichText::new(tr("总输出:", "Master:")).size(11.0).color(Color32::GRAY));
+                ui.label(egui::RichText::new(tr("总输出", "Master")).size(11.0).color(Color32::from_rgb(130, 140, 155)));
 
                 ui.add_space(14.0);
 
-                // Latency Badge
+                // Sample Rate & Buffer Latency
                 let latency_ms = (self.buffer_size as f32 / self.sample_rate as f32) * 1000.0;
                 let badge_text = format!("{} Hz | {} smp (~{:.1} ms)", self.sample_rate, self.buffer_size, latency_ms);
                 ui.label(
                     egui::RichText::new(badge_text)
                         .size(11.0)
-                        .color(Color32::from_rgb(0, 230, 140))
+                        .color(Color32::from_rgb(52, 211, 153))
                         .monospace(),
                 );
             });
@@ -184,27 +198,27 @@ impl LiveProcessorApp {
     fn render_status_bar(&self, ui: &mut Ui) {
         ui.horizontal(|ui| {
             #[cfg(windows)]
-            let os_text = format!("{}: Windows x64 ({})", tr("平台", "Platform"), if is_64bit_os() { tr("64位内核", "64-bit Kernel") } else { tr("32位", "32-bit") });
+            let os_text = format!("{}: Windows x64 ({})", tr("平台", "Host"), if is_64bit_os() { tr("64位内核", "64-bit") } else { tr("32位", "32-bit") });
             #[cfg(not(windows))]
-            let os_text = format!("{}: Linux (PipeWire/JACK/ALSA)", tr("平台", "Platform"));
+            let os_text = format!("{}: Linux (PipeWire / ALSA)", tr("平台", "Host"));
 
-            ui.label(egui::RichText::new(os_text).size(11.0).color(Color32::from_rgb(140, 155, 175)));
+            ui.label(egui::RichText::new(os_text).size(10.5).color(Color32::from_rgb(120, 130, 145)));
             ui.separator();
 
             ui.label(
-                egui::RichText::new(tr("ASIO Link Pro 2.4.4.2 [Give Academy 终身补丁已集成]", "ASIO Link Pro 2.4.4.2 [Give Academy Patched]"))
-                    .size(11.0)
-                    .color(Color32::from_rgb(0, 210, 255)),
+                egui::RichText::new(tr("ASIO Link Pro 2.4.4.2 [Give Academy 终身补丁]", "ASIO Link Pro 2.4.4.2 [Give Academy Patched]"))
+                    .size(10.5)
+                    .color(Color32::from_rgb(180, 192, 210)),
             );
             ui.separator();
 
             #[cfg(windows)]
-            ui.label(egui::RichText::new(tr("CI 代码完整性 UpgradedSystem=1 [已受保护]", "CI Policy UpgradedSystem = 1 [ACTIVE]")).size(11.0).color(Color32::from_rgb(0, 230, 140)));
+            ui.label(egui::RichText::new(tr("CI 代码完整性 UpgradedSystem=1 [正常守护]", "CI Policy UpgradedSystem = 1 [PROTECTED]")).size(10.5).color(Color32::from_rgb(52, 211, 153)));
             #[cfg(not(windows))]
-            ui.label(egui::RichText::new(tr("Linux 实时音频子系统已就绪", "Linux Audio Subsystem: Realtime Ready")).size(11.0).color(Color32::from_rgb(0, 230, 140)));
+            ui.label(egui::RichText::new(tr("Linux 实时音频子系统已就绪", "Linux Audio Subsystem Ready")).size(10.5).color(Color32::from_rgb(52, 211, 153)));
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.label(egui::RichText::new("v2.4.4-rev1 (GUI)").size(10.0).color(Color32::GRAY));
+                ui.label(egui::RichText::new("Live-Processor v2.4.4").size(10.0).color(Color32::from_rgb(100, 110, 125)));
             });
         });
     }
@@ -215,17 +229,27 @@ fn render_nav_tab(ui: &mut Ui, current: &mut ActiveTab, tab: ActiveTab, label: &
     let text = egui::RichText::new(label)
         .size(12.0)
         .color(if is_selected {
-            Color32::from_rgb(0, 230, 255)
+            Color32::from_rgb(240, 245, 252)
         } else {
-            Color32::from_rgb(170, 180, 200)
+            Color32::from_rgb(140, 152, 168)
         })
         .strong();
 
-    let btn = egui::Button::new(text).fill(if is_selected {
-        Color32::from_rgb(28, 36, 48)
-    } else {
-        Color32::from_rgb(16, 20, 26)
-    });
+    let btn = egui::Button::new(text)
+        .fill(if is_selected {
+            Color32::from_rgb(32, 40, 52)
+        } else {
+            Color32::from_rgb(22, 26, 32)
+        })
+        .stroke(Stroke::new(
+            1.0,
+            if is_selected {
+                Color32::from_rgb(56, 189, 248)
+            } else {
+                Color32::from_rgb(36, 42, 52)
+            },
+        ))
+        .corner_radius(egui::CornerRadius::same(4));
 
     if ui.add(btn).clicked() {
         *current = tab;

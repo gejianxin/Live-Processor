@@ -4,50 +4,51 @@ use crate::i18n::tr;
 
 pub const SOURCES_ZH: &[&str] = &[
     "ASIO IN 1-2 (麦克风/人声)",
-    "ASIO IN 3-4 (乐器/合成器)",
-    "VIRTUAL 1-2 (宿主 DAW 总输出)",
-    "VIRTUAL 3-4 (音乐/媒体播放)",
+    "ASIO IN 3-4 (乐器/硬件输入)",
+    "VIRTUAL 1-2 (DAW 宿主总输出)",
+    "VIRTUAL 3-4 (音乐播放器/媒体)",
     "VIRTUAL 5-6 (语音通话/连麦)",
     "VIRTUAL 7-8 (系统辅助/Aux)",
 ];
 
 pub const SOURCES_EN: &[&str] = &[
-    "ASIO IN 1-2 (Mic/Pre)",
-    "ASIO IN 3-4 (Line/Synth)",
+    "ASIO IN 1-2 (Mic / Pre)",
+    "ASIO IN 3-4 (Line / Synth)",
     "VIRTUAL 1-2 (DAW Master)",
-    "VIRTUAL 3-4 (BGM/Media)",
-    "VIRTUAL 5-6 (Chat/Discord)",
-    "VIRTUAL 7-8 (System/Aux)",
+    "VIRTUAL 3-4 (Music / Media)",
+    "VIRTUAL 5-6 (Voice / Chat)",
+    "VIRTUAL 7-8 (System / Aux)",
 ];
 
 pub const DESTINATIONS_ZH: &[&str] = &[
     "ASIO OUT 1-2 (主监听音箱)",
     "ASIO OUT 3-4 (监听耳机)",
-    "VIRTUAL OUT 1-2 (OBS 直播流)",
-    "VIRTUAL OUT 3-4 (DAW 回环录音)",
-    "VIRTUAL OUT 5-6 (语音麦克风输出)",
-    "VIRTUAL OUT 7-8 (辅助发送 Aux)",
+    "VIRTUAL 1-2 (OBS 直播流)",
+    "VIRTUAL 3-4 (DAW 回环录音)",
+    "VIRTUAL 5-6 (连麦麦克风)",
+    "VIRTUAL 7-8 (辅助发送 Aux)",
 ];
 
 pub const DESTINATIONS_EN: &[&str] = &[
     "ASIO OUT 1-2 (Monitors)",
     "ASIO OUT 3-4 (Headphones)",
-    "VIRTUAL OUT 1-2 (OBS Stream)",
-    "VIRTUAL OUT 3-4 (DAW Loopback)",
-    "VIRTUAL OUT 5-6 (Voice Mic)",
-    "VIRTUAL OUT 7-8 (Aux Send)",
+    "VIRTUAL 1-2 (OBS Stream)",
+    "VIRTUAL 3-4 (DAW Loopback)",
+    "VIRTUAL 5-6 (Voice Mic)",
+    "VIRTUAL 7-8 (Aux Send)",
 ];
 
 pub struct RoutingMatrix {
     pub connections: Vec<Vec<bool>>,
     pub signal_levels: Vec<f32>,
+    pub direct_monitoring: bool,
 }
 
 impl Default for RoutingMatrix {
     fn default() -> Self {
         let mut connections = vec![vec![false; DESTINATIONS_EN.len()]; SOURCES_EN.len()];
 
-        // Default routing preset
+        // Default clean broadcast routing
         connections[0][0] = true; // Mic -> Monitors
         connections[0][2] = true; // Mic -> OBS
         connections[0][4] = true; // Mic -> Voice Mic
@@ -61,7 +62,8 @@ impl Default for RoutingMatrix {
 
         Self {
             connections,
-            signal_levels: vec![0.75, 0.45, 0.88, 0.60, 0.35, 0.15],
+            signal_levels: vec![0.72, 0.45, 0.82, 0.58, 0.38, 0.20],
+            direct_monitoring: true,
         }
     }
 }
@@ -72,182 +74,273 @@ impl RoutingMatrix {
         let sources = if is_zh { SOURCES_ZH } else { SOURCES_EN };
         let destinations = if is_zh { DESTINATIONS_ZH } else { DESTINATIONS_EN };
 
+        let avail_w = ui.available_width();
+        let avail_h = (ui.available_height() - 10.0).max(400.0);
+
         ui.vertical(|ui| {
+            // Header Row
             ui.horizontal(|ui| {
                 ui.heading(
-                    egui::RichText::new(tr("🎛️ 跳线矩阵（虚拟跳线盘与音频路由矩阵）", "🎛️ Wire Matrix (Virtual Patchbay & Audio Matrix)"))
-                        .color(Color32::from_rgb(0, 220, 255))
+                    egui::RichText::new(tr("交叉跳线矩阵", "Wire Routing Matrix"))
+                        .color(Color32::from_rgb(230, 236, 244))
                         .strong(),
                 );
+                ui.label(
+                    egui::RichText::new(tr("(物理 ASIO 与虚拟 WDM 通道零延迟互联)", "(Zero-latency ASIO & WDM Patchbay)"))
+                        .color(Color32::from_rgb(120, 130, 145))
+                        .small(),
+                );
+
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button(tr("清空所有", "Clear All")).clicked() {
+                    if ui.button(egui::RichText::new(tr("清空跳线", "Clear All")).size(11.0)).clicked() {
                         for row in &mut self.connections {
                             for cell in row {
                                 *cell = false;
                             }
                         }
                     }
-                    if ui.button(tr("恢复默认", "Reset Default")).clicked() {
+                    if ui.button(egui::RichText::new(tr("重置默认", "Reset")).size(11.0)).clicked() {
                         *self = Self::default();
-                    }
-                    if ui.button(tr("一键直播广播预设", "Broadcast Preset")).clicked() {
-                        self.apply_broadcast_preset();
                     }
                 });
             });
 
             ui.add_space(8.0);
-            ui.label(
-                egui::RichText::new(tr(
-                    "交互式交叉跳线矩阵。点击任意交叉点以实现物理 ASIO 与虚拟 WDM 通道的零延迟互联，实时路由任意宿主与播放器音频。",
-                    "Interactive cross-point matrix. Click any intersection node to route physical ASIO and virtual WDM channels with zero latency."
-                ))
-                .color(Color32::from_rgb(160, 175, 195))
-                .small(),
-            );
-            ui.add_space(10.0);
 
-            // Matrix Grid
-            egui::Frame::NONE
-                .fill(Color32::from_rgb(14, 17, 22))
-                .stroke(Stroke::new(1.0, Color32::from_rgb(38, 44, 56)))
-                .inner_margin(16.0)
-                .show(ui, |ui| {
-                    let cell_size = 32.0;
-                    let label_width = 220.0;
-                    let header_height = 80.0;
+            // Responsive Two-Column Layout (Left: Matrix Grid, Right: Inspector & Presets)
+            let inspector_w = 260.0;
+            let matrix_w = (avail_w - inspector_w - 16.0).max(520.0);
 
-                    // Header row: Destinations
-                    let (header_rect, _) = ui.allocate_exact_size(
-                        Vec2::new(label_width + (destinations.len() as f32) * cell_size + 40.0, header_height),
-                        egui::Sense::hover(),
-                    );
+            ui.horizontal(|ui| {
+                // Left Panel: Full Adaptive Matrix Grid
+                egui::Frame::NONE
+                    .fill(Color32::from_rgb(22, 25, 31))
+                    .stroke(Stroke::new(1.0, Color32::from_rgb(38, 44, 54)))
+                    .corner_radius(egui::CornerRadius::same(6))
+                    .inner_margin(14.0)
+                    .show(ui, |ui| {
+                        ui.set_width(matrix_w);
+                        ui.set_min_height(avail_h);
 
-                    let painter = ui.painter();
-                    for (col_idx, dest) in destinations.iter().enumerate() {
-                        let x = header_rect.min.x + label_width + (col_idx as f32) * cell_size + cell_size * 0.5;
-                        let y = header_rect.max.y - 10.0;
+                        let label_width = 200.0;
+                        let col_count = destinations.len() as f32;
+                        let col_width = ((matrix_w - label_width - 32.0) / col_count).clamp(50.0, 95.0);
 
-                        painter.text(
-                            Pos2::new(x, y),
-                            egui::Align2::RIGHT_CENTER,
-                            *dest,
-                            egui::FontId::proportional(11.0),
-                            Color32::from_rgb(0, 210, 255),
-                        );
-                    }
-
-                    // Rows: Sources
-                    for (row_idx, source) in sources.iter().enumerate() {
+                        // Destination Headers
                         ui.horizontal(|ui| {
-                            // Signal level indicator
-                            let level = (self.signal_levels[row_idx] + (time * 3.0 + (row_idx as f64)).sin() as f32 * 0.15).clamp(0.05, 1.0);
-
-                            // Mini VU meter bar
-                            let (meter_rect, _) = ui.allocate_exact_size(Vec2::new(8.0, 24.0), egui::Sense::hover());
-                            let meter_fill = if level > 0.85 {
-                                Color32::from_rgb(255, 60, 60)
-                            } else if level > 0.65 {
-                                Color32::from_rgb(255, 200, 40)
-                            } else {
-                                Color32::from_rgb(0, 230, 120)
-                            };
-                            ui.painter().rect_filled(meter_rect, 2.0, Color32::from_rgb(25, 30, 38));
-                            let filled_h = meter_rect.height() * level;
-                            let active_rect = Rect::from_min_max(
-                                Pos2::new(meter_rect.min.x, meter_rect.max.y - filled_h),
-                                meter_rect.max,
-                            );
-                            ui.painter().rect_filled(active_rect, 2.0, meter_fill);
-
-                            // Source Label
-                            ui.add_sized(
-                                [label_width - 24.0, 26.0],
-                                egui::Label::new(
-                                    egui::RichText::new(*source)
-                                        .color(Color32::from_rgb(220, 228, 240))
-                                        .strong(),
-                                ),
-                            );
-
-                            // Cross points
-                            for (col_idx, _) in destinations.iter().enumerate() {
-                                let is_connected = self.connections[row_idx][col_idx];
-                                let (rect, response) = ui.allocate_exact_size(Vec2::splat(cell_size), egui::Sense::click());
-
-                                if response.clicked() {
-                                    self.connections[row_idx][col_idx] = !is_connected;
-                                }
-
-                                let center = rect.center();
-                                let bg_color = if response.hovered() {
-                                    Color32::from_rgb(32, 40, 52)
-                                } else {
-                                    Color32::from_rgb(20, 24, 32)
-                                };
-
-                                ui.painter().rect_filled(rect.shrink(2.0), 4.0, bg_color);
-                                ui.painter().rect_stroke(
-                                    rect.shrink(2.0),
-                                    4.0,
-                                    Stroke::new(1.0, Color32::from_rgb(45, 52, 66)),
-                                    egui::StrokeKind::Inside,
+                            ui.allocate_exact_size(Vec2::new(label_width, 42.0), egui::Sense::hover());
+                            for dest in destinations {
+                                ui.allocate_ui_with_layout(
+                                    Vec2::new(col_width, 42.0),
+                                    egui::Layout::centered_and_justified(egui::Direction::TopDown),
+                                    |ui| {
+                                        let short_name = simplify_dest_name(dest);
+                                        egui::Frame::NONE
+                                            .fill(Color32::from_rgb(28, 33, 42))
+                                            .corner_radius(egui::CornerRadius::same(3))
+                                            .inner_margin(egui::Margin::symmetric(4, 4))
+                                            .show(ui, |ui| {
+                                                ui.label(
+                                                    egui::RichText::new(short_name)
+                                                        .size(10.5)
+                                                        .color(Color32::from_rgb(180, 195, 215))
+                                                        .strong(),
+                                                );
+                                            });
+                                    },
                                 );
-
-                                if is_connected {
-                                    let pulse = ((time * 4.0).sin() * 0.15 + 0.85) as f32;
-                                    let dot_color = if col_idx < 2 {
-                                        Color32::from_rgb(
-                                            (0.0 * pulse) as u8,
-                                            (229.0 * pulse) as u8,
-                                            (255.0 * pulse) as u8,
-                                        )
-                                    } else {
-                                        Color32::from_rgb(
-                                            (255.0 * pulse) as u8,
-                                            (170.0 * pulse) as u8,
-                                            (0.0 * pulse) as u8,
-                                        )
-                                    };
-
-                                    ui.painter().circle_filled(center, 6.0, dot_color);
-                                    ui.painter().circle_stroke(center, 9.0, Stroke::new(1.2, dot_color));
-                                } else if response.hovered() {
-                                    ui.painter().circle_stroke(
-                                        center,
-                                        4.0,
-                                        Stroke::new(1.0, Color32::from_rgb(100, 115, 135)),
-                                    );
-                                }
                             }
                         });
-                    }
-                });
 
-            ui.add_space(12.0);
-            ui.horizontal(|ui| {
-                ui.label(egui::RichText::new(tr("● 青色节点: 物理 ASIO 硬件输出端口", "● Cyan Nodes: Physical ASIO Hardware Out")).color(Color32::from_rgb(0, 220, 255)).small());
-                ui.label(egui::RichText::new(tr("● 橙色节点: 系统虚拟 WDM 播放/录制端点", "● Amber Nodes: Virtual WDM Endpoints")).color(Color32::from_rgb(255, 170, 0)).small());
+                        ui.add_space(6.0);
+                        ui.separator();
+                        ui.add_space(6.0);
+
+                        // Source Rows
+                        for (row_idx, source) in sources.iter().enumerate() {
+                            let level = (self.signal_levels[row_idx] + (time * 2.5 + (row_idx as f64)).sin() as f32 * 0.12).clamp(0.05, 0.95);
+
+                            ui.horizontal(|ui| {
+                                // Mini signal meter (subtle emerald bar)
+                                let (meter_rect, _) = ui.allocate_exact_size(Vec2::new(4.0, 32.0), egui::Sense::hover());
+                                ui.painter().rect_filled(meter_rect, 1.0, Color32::from_rgb(32, 38, 48));
+                                let filled_h = meter_rect.height() * level;
+                                let active_rect = Rect::from_min_max(
+                                    Pos2::new(meter_rect.min.x, meter_rect.max.y - filled_h),
+                                    meter_rect.max,
+                                );
+                                let bar_color = if level > 0.88 {
+                                    Color32::from_rgb(248, 113, 113)
+                                } else {
+                                    Color32::from_rgb(52, 211, 153)
+                                };
+                                ui.painter().rect_filled(active_rect, 1.0, bar_color);
+
+                                ui.add_space(6.0);
+
+                                // Source channel label
+                                ui.add_sized(
+                                    [label_width - 16.0, 32.0],
+                                    egui::Label::new(
+                                        egui::RichText::new(*source)
+                                            .size(11.5)
+                                            .color(Color32::from_rgb(215, 222, 232)),
+                                    ),
+                                );
+
+                                // Cross-points
+                                for (col_idx, _) in destinations.iter().enumerate() {
+                                    let is_connected = self.connections[row_idx][col_idx];
+                                    let (rect, response) = ui.allocate_exact_size(Vec2::new(col_width, 32.0), egui::Sense::click());
+
+                                    if response.clicked() {
+                                        self.connections[row_idx][col_idx] = !is_connected;
+                                    }
+
+                                    let center = rect.center();
+                                    let cell_bg = if response.hovered() {
+                                        Color32::from_rgb(34, 40, 52)
+                                    } else {
+                                        Color32::from_rgb(24, 28, 35)
+                                    };
+
+                                    ui.painter().rect_filled(rect.shrink(2.0), 3.0, cell_bg);
+
+                                    // Round connection pin
+                                    let pin_radius = 5.0;
+                                    if is_connected {
+                                        // Active Studio Sky Pin
+                                        ui.painter().circle_filled(center, pin_radius + 2.0, Color32::from_rgba_premultiplied(56, 189, 248, 40));
+                                        ui.painter().circle_filled(center, pin_radius, Color32::from_rgb(56, 189, 248));
+                                    } else {
+                                        // Unconnected muted pin
+                                        ui.painter().circle_filled(center, 2.5, Color32::from_rgb(46, 54, 66));
+                                    }
+                                }
+                            });
+
+                            ui.add_space(4.0);
+                        }
+                    });
+
+                ui.add_space(12.0);
+
+                // Right Panel: Routing Inspector & Presets
+                egui::Frame::NONE
+                    .fill(Color32::from_rgb(22, 25, 31))
+                    .stroke(Stroke::new(1.0, Color32::from_rgb(38, 44, 54)))
+                    .corner_radius(egui::CornerRadius::same(6))
+                    .inner_margin(14.0)
+                    .show(ui, |ui| {
+                        ui.set_width(inspector_w);
+                        ui.set_min_height(avail_h);
+
+                        ui.label(egui::RichText::new(tr("路由概览与预设", "Inspector & Presets")).strong().size(13.0).color(Color32::from_rgb(220, 228, 238)));
+                        ui.add_space(6.0);
+                        ui.separator();
+                        ui.add_space(8.0);
+
+                        // Stats
+                        let mut active_nodes = 0;
+                        for r in &self.connections {
+                            for c in r {
+                                if *c { active_nodes += 1; }
+                            }
+                        }
+
+                        render_inspector_row(ui, tr("活跃跳线节点", "Active Patchpoints"), &format!("{} / 36", active_nodes));
+                        render_inspector_row(ui, tr("内建延迟补偿", "Latency Offset"), "0.0 ms (Direct)");
+                        render_inspector_row(ui, tr("信号状态", "Routing Engine"), tr("就绪 [正常]", "Online"));
+
+                        ui.add_space(14.0);
+                        ui.label(egui::RichText::new(tr("一键跳线预设", "Routing Presets")).strong().size(11.5).color(Color32::from_rgb(180, 192, 210)));
+                        ui.add_space(6.0);
+
+                        if ui.button(egui::RichText::new(tr("🎙️ 网络直播标准模式", "🎙️ Live Stream Standard")).size(11.0)).clicked() {
+                            self.apply_broadcast_preset();
+                        }
+                        ui.add_space(4.0);
+
+                        if ui.button(egui::RichText::new(tr("🎧 DAW 纯录音监听模式", "🎧 DAW Tracking Studio")).size(11.0)).clicked() {
+                            self.apply_studio_preset();
+                        }
+                        ui.add_space(4.0);
+
+                        if ui.button(egui::RichText::new(tr("🎮 连麦游戏连线模式", "🎮 Discord / Gaming")).size(11.0)).clicked() {
+                            self.apply_gaming_preset();
+                        }
+
+                        ui.add_space(16.0);
+                        ui.separator();
+                        ui.add_space(10.0);
+
+                        ui.checkbox(&mut self.direct_monitoring, tr("启用硬件零延迟直通", "Direct ASIO Monitoring"));
+                        ui.add_space(4.0);
+                        ui.label(
+                            egui::RichText::new(tr("绕过 Windows 音频引擎，以极致低延迟直通监听。", "Bypass Windows audio engine for lowest latency."))
+                                .size(10.0)
+                                .color(Color32::from_rgb(110, 120, 135)),
+                        );
+                    });
             });
         });
     }
 
-    fn apply_broadcast_preset(&mut self) {
+    pub fn apply_broadcast_preset(&mut self) {
         for row in &mut self.connections {
             for cell in row {
                 *cell = false;
             }
         }
-        // Mic -> Stream + Discord
-        self.connections[0][2] = true;
-        self.connections[0][4] = true;
-        // DAW -> Monitors + Stream
-        self.connections[2][0] = true;
-        self.connections[2][2] = true;
-        // BGM -> Stream + Monitors
-        self.connections[3][0] = true;
-        self.connections[3][2] = true;
-        // Discord -> Headphones only
-        self.connections[4][1] = true;
+        self.connections[0][0] = true; // Mic -> Monitors
+        self.connections[0][2] = true; // Mic -> OBS
+        self.connections[0][4] = true; // Mic -> Chat Mic
+        self.connections[2][0] = true; // DAW -> Monitors
+        self.connections[2][2] = true; // DAW -> OBS
+        self.connections[3][0] = true; // BGM -> Monitors
+        self.connections[3][2] = true; // BGM -> OBS
+        self.connections[4][0] = true; // Chat -> Monitors
     }
+
+    pub fn apply_studio_preset(&mut self) {
+        for row in &mut self.connections {
+            for cell in row {
+                *cell = false;
+            }
+        }
+        self.connections[0][0] = true; // Mic -> Monitors
+        self.connections[0][1] = true; // Mic -> Headphones
+        self.connections[1][0] = true; // Inst -> Monitors
+        self.connections[1][1] = true; // Inst -> Headphones
+        self.connections[2][0] = true; // DAW -> Monitors
+        self.connections[2][1] = true; // DAW -> Headphones
+    }
+
+    pub fn apply_gaming_preset(&mut self) {
+        for row in &mut self.connections {
+            for cell in row {
+                *cell = false;
+            }
+        }
+        self.connections[0][4] = true; // Mic -> Discord
+        self.connections[3][1] = true; // Music -> Headphones
+        self.connections[4][1] = true; // Discord -> Headphones
+    }
+}
+
+fn simplify_dest_name(full: &str) -> String {
+    if let Some(pos) = full.find('(') {
+        let name = &full[pos + 1..];
+        name.trim_end_matches(')').to_string()
+    } else {
+        full.to_string()
+    }
+}
+
+fn render_inspector_row(ui: &mut Ui, key: &str, val: &str) {
+    ui.horizontal(|ui| {
+        ui.label(egui::RichText::new(format!("{}:", key)).size(10.5).color(Color32::from_rgb(120, 130, 145)));
+        ui.label(egui::RichText::new(val).size(10.5).color(Color32::from_rgb(205, 215, 228)));
+    });
+    ui.add_space(2.0);
 }

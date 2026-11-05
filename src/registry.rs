@@ -121,7 +121,7 @@ pub fn configure_installation_registry(
     apply_code_integrity_policy_fix()?;
 
     if !is_64bit_os() {
-        let _ = std::process::Command::new("reg.exe")
+        let _ = crate::config::silent_command("reg.exe")
             .args(["FLAGS", "HKLM\\SOFTWARE\\ODeusAudio\\ASIOLinkPro", "SET", "DONT_VIRTUALIZE", "/s"])
             .status();
     }

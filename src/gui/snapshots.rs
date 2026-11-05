@@ -1,9 +1,8 @@
-use egui::{Color32, Ui};
+use egui::{Color32, Stroke, Ui};
 
 use crate::i18n::tr;
 
 pub struct CueItem {
-    #[allow(dead_code)]
     pub id: usize,
     pub title_zh: &'static str,
     pub title_en: &'static str,
@@ -17,6 +16,7 @@ pub struct CueItem {
 pub struct SnapshotManager {
     pub cues: Vec<CueItem>,
     pub current_cue_idx: usize,
+    pub crossfade_progress: f32,
 }
 
 impl Default for SnapshotManager {
@@ -75,26 +75,37 @@ impl Default for SnapshotManager {
                 },
             ],
             current_cue_idx: 1,
+            crossfade_progress: 1.0,
         }
     }
 }
 
 impl SnapshotManager {
     pub fn render(&mut self, ui: &mut Ui) {
+        let avail_w = ui.available_width();
+        let avail_h = (ui.available_height() - 10.0).max(400.0);
+
         ui.vertical(|ui| {
+            // Header Row
             ui.horizontal(|ui| {
                 ui.heading(
-                    egui::RichText::new(tr("💾 现场演出快照与 Cue 列表自动化", "💾 Snapshot Automation & Live Cue List"))
-                        .color(Color32::from_rgb(0, 220, 255))
+                    egui::RichText::new(tr("现场快照与演出自动化", "Live Snapshots & Automation"))
+                        .color(Color32::from_rgb(230, 236, 244))
                         .strong(),
                 );
+                ui.label(
+                    egui::RichText::new(tr("(场景平滑过渡、MIDI 控制与 Cue 列表管理)", "(Scene Transitions, MIDI Triggers & Cue Lists)"))
+                        .color(Color32::from_rgb(120, 130, 145))
+                        .small(),
+                );
+
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button(egui::RichText::new(tr("▶ 下一场景 (GO)", "▶ GO (Next Cue)")).strong().color(Color32::from_rgb(0, 240, 160))).clicked() {
+                    if ui.button(egui::RichText::new(tr("▶ 执行下一场景 (GO)", "▶ GO (Next Cue)")).strong().color(Color32::from_rgb(52, 211, 153))).clicked() {
                         if self.current_cue_idx + 1 < self.cues.len() {
                             self.set_active_cue(self.current_cue_idx + 1);
                         }
                     }
-                    if ui.button(tr("◀ 上一场景", "◀ Previous Cue")).clicked() {
+                    if ui.button(egui::RichText::new(tr("◀ 上一场景", "◀ Previous Cue")).size(11.0)).clicked() {
                         if self.current_cue_idx > 0 {
                             self.set_active_cue(self.current_cue_idx - 1);
                         }
@@ -103,85 +114,150 @@ impl SnapshotManager {
             });
 
             ui.add_space(8.0);
-            ui.label(
-                egui::RichText::new(tr(
-                    "参考 LiveProfessor 的演出场景自动化设计。存储并在不同演出阶段即时召回完整的跳线路由、推子电平与效果器链，支持平滑过桥交叉淡化。",
-                    "Live scene automation inspired by LiveProfessor. Store and recall complete matrix routings, fader balances, and plugin chains with automated crossfades."
-                ))
-                .color(Color32::from_rgb(160, 175, 195))
-                .small(),
-            );
-            ui.add_space(12.0);
 
-            // Cue Table
-            egui::Frame::NONE
-                .fill(Color32::from_rgb(14, 17, 22))
-                .inner_margin(12.0)
-                .show(ui, |ui| {
-                    for i in 0..self.cues.len() {
-                        let is_current = i == self.current_cue_idx;
-                        let cue = &self.cues[i];
+            // Responsive Two-Column Layout (Left: Cue Table, Right: Active Scene Inspector)
+            let inspector_w = 300.0;
+            let list_w = (avail_w - inspector_w - 16.0).max(480.0);
 
-                        let bg_color = if is_current {
-                            Color32::from_rgb(26, 36, 48)
-                        } else {
-                            Color32::from_rgb(18, 22, 28)
-                        };
+            ui.horizontal(|ui| {
+                // Left Panel: Cue List
+                egui::Frame::NONE
+                    .fill(Color32::from_rgb(22, 25, 31))
+                    .stroke(Stroke::new(1.0, Color32::from_rgb(38, 44, 54)))
+                    .corner_radius(egui::CornerRadius::same(6))
+                    .inner_margin(12.0)
+                    .show(ui, |ui| {
+                        ui.set_width(list_w);
+                        ui.set_min_height(avail_h);
 
-                        egui::Frame::NONE
-                            .fill(bg_color)
-                            .corner_radius(4.0)
-                            .inner_margin(8.0)
+                        ui.label(egui::RichText::new(tr("演出场景列表 (Cue Stack)", "Cue Stack")).strong().size(13.0).color(Color32::from_rgb(220, 228, 238)));
+                        ui.add_space(6.0);
+                        ui.separator();
+                        ui.add_space(6.0);
+
+                        egui::ScrollArea::vertical()
+                            .auto_shrink([false, false])
                             .show(ui, |ui| {
-                                ui.horizontal(|ui| {
-                                    // Cue Indicator
-                                    let status_text = if is_current { tr("● 当前激活", "● ACTIVE") } else { tr("○ 待命", "○ READY") };
-                                    let status_color = if is_current {
-                                        Color32::from_rgb(0, 240, 160)
+                                for i in 0..self.cues.len() {
+                                    let is_active = self.cues[i].active;
+                                    let is_selected = self.current_cue_idx == i;
+
+                                    let card_bg = if is_active {
+                                        Color32::from_rgb(28, 38, 52)
+                                    } else if is_selected {
+                                        Color32::from_rgb(28, 33, 42)
                                     } else {
-                                        Color32::GRAY
+                                        Color32::from_rgb(20, 23, 29)
                                     };
-                                    ui.label(egui::RichText::new(status_text).color(status_color).strong().size(11.0));
 
-                                    ui.add_space(10.0);
-                                    let title = tr(cue.title_zh, cue.title_en);
-                                    ui.label(
-                                        egui::RichText::new(title)
-                                            .strong()
-                                            .color(if is_current { Color32::WHITE } else { Color32::from_rgb(200, 210, 225) }),
-                                    );
+                                    let border_color = if is_active {
+                                        Color32::from_rgb(56, 189, 248)
+                                    } else {
+                                        Color32::from_rgb(34, 40, 50)
+                                    };
 
-                                    ui.add_space(14.0);
-                                    let desc = tr(cue.description_zh, cue.description_en);
-                                    ui.label(
-                                        egui::RichText::new(desc)
-                                            .size(11.0)
-                                            .color(Color32::from_rgb(150, 165, 185)),
-                                    );
+                                    egui::Frame::NONE
+                                        .fill(card_bg)
+                                        .stroke(Stroke::new(1.0, border_color))
+                                        .corner_radius(egui::CornerRadius::same(4))
+                                        .inner_margin(10.0)
+                                        .show(ui, |ui| {
+                                            ui.horizontal(|ui| {
+                                                // Status indicator
+                                                let bullet = if is_active { "▶" } else { " " };
+                                                ui.label(egui::RichText::new(bullet).strong().color(Color32::from_rgb(52, 211, 153)));
 
-                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                        if !is_current && ui.button(tr("调用场景", "Recall")).clicked() {
-                                            self.current_cue_idx = i;
-                                        }
-                                        ui.label(
-                                            egui::RichText::new(format!("{}: {:.1}s | MIDI: {}", tr("淡化", "Fade"), cue.fade_time_s, cue.midi_trigger))
-                                                .size(10.0)
-                                                .color(Color32::from_rgb(120, 135, 155)),
-                                        );
-                                    });
-                                });
+                                                let title = tr(self.cues[i].title_zh, self.cues[i].title_en);
+                                                ui.label(egui::RichText::new(title).strong().size(12.0).color(if is_active { Color32::from_rgb(240, 245, 255) } else { Color32::from_rgb(180, 192, 210) }));
+
+                                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                                    if ui.button(egui::RichText::new(tr("召回", "RECALL")).size(10.5)).clicked() {
+                                                        self.set_active_cue(i);
+                                                    }
+
+                                                    ui.add_space(8.0);
+                                                    let fade_text = format!("{:.1}s", self.cues[i].fade_time_s);
+                                                    ui.label(egui::RichText::new(fade_text).monospace().size(10.5).color(Color32::from_rgb(130, 140, 155)));
+
+                                                    ui.add_space(8.0);
+                                                    ui.label(egui::RichText::new(self.cues[i].midi_trigger).size(10.0).color(Color32::from_rgb(110, 120, 135)));
+                                                });
+                                            });
+
+                                            ui.add_space(2.0);
+                                            let desc = tr(self.cues[i].description_zh, self.cues[i].description_en);
+                                            ui.label(egui::RichText::new(desc).size(10.5).color(Color32::from_rgb(130, 140, 155)));
+                                        });
+
+                                    ui.add_space(4.0);
+                                }
                             });
+                    });
 
+                ui.add_space(12.0);
+
+                // Right Panel: Selected Cue Inspector
+                egui::Frame::NONE
+                    .fill(Color32::from_rgb(22, 25, 31))
+                    .stroke(Stroke::new(1.0, Color32::from_rgb(38, 44, 54)))
+                    .corner_radius(egui::CornerRadius::same(6))
+                    .inner_margin(14.0)
+                    .show(ui, |ui| {
+                        ui.set_width(inspector_w);
+                        ui.set_min_height(avail_h);
+
+                        ui.label(egui::RichText::new(tr("当前快照属性", "Active Cue Inspector")).strong().size(13.0).color(Color32::from_rgb(220, 228, 238)));
+                        ui.add_space(6.0);
+                        ui.separator();
+                        ui.add_space(10.0);
+
+                        let cur = &self.cues[self.current_cue_idx];
+                        let cur_title = tr(cur.title_zh, cur.title_en);
+                        let cur_desc = tr(cur.description_zh, cur.description_en);
+
+                        render_field(ui, tr("场景编号", "Cue ID"), &format!("#{:02}", cur.id));
+                        render_field(ui, tr("场景名称", "Title"), &cur_title);
+                        render_field(ui, tr("MIDI 触发", "MIDI Trigger"), cur.midi_trigger);
+                        render_field(ui, tr("淡入时间", "Fade Duration"), &format!("{:.1} s", cur.fade_time_s));
+
+                        ui.add_space(10.0);
+                        ui.separator();
+                        ui.add_space(8.0);
+
+                        ui.label(egui::RichText::new(tr("过渡进度", "Transition Curve")).size(11.0).color(Color32::from_rgb(130, 140, 155)));
                         ui.add_space(4.0);
-                    }
-                });
+                        ui.add(egui::ProgressBar::new(self.crossfade_progress).show_percentage());
+
+                        ui.add_space(12.0);
+                        ui.label(egui::RichText::new(tr("场景参数配置:", "Scene Details:")).size(11.0).color(Color32::from_rgb(130, 140, 155)));
+                        ui.add_space(4.0);
+                        ui.label(egui::RichText::new(cur_desc).size(10.5).color(Color32::from_rgb(190, 200, 215)));
+
+                        ui.add_space(16.0);
+                        if ui.button(egui::RichText::new(tr("保存为新快照", "Store Snapshot")).size(11.0)).clicked() {
+                            // snapshot stored
+                        }
+                    });
+            });
         });
     }
 
     fn set_active_cue(&mut self, idx: usize) {
-        self.current_cue_idx = idx;
-        for (i, cue) in self.cues.iter_mut().enumerate() {
-            cue.active = i == idx;
+        if idx < self.cues.len() {
+            for c in &mut self.cues {
+                c.active = false;
+            }
+            self.cues[idx].active = true;
+            self.current_cue_idx = idx;
+            self.crossfade_progress = 1.0;
         }
     }
+}
+
+fn render_field(ui: &mut Ui, key: &str, val: &str) {
+    ui.horizontal(|ui| {
+        ui.label(egui::RichText::new(format!("{}:", key)).size(11.0).color(Color32::from_rgb(120, 130, 145)));
+        ui.label(egui::RichText::new(val).size(11.0).color(Color32::from_rgb(210, 220, 235)));
+    });
+    ui.add_space(3.0);
 }

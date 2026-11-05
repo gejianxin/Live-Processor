@@ -4,9 +4,7 @@ use std::path::Path;
 #[cfg(windows)]
 use anyhow::{bail, Context};
 #[cfg(windows)]
-use std::process::Command;
-#[cfg(windows)]
-use crate::config::is_64bit_os;
+use crate::config::{is_64bit_os, silent_command};
 
 #[cfg(windows)]
 pub fn get_regsvr32_paths() -> (String, Option<String>) {
@@ -31,7 +29,7 @@ pub fn register_com_libraries(app_dir: &Path) -> Result<()> {
             if let Some(regsvr64) = regsvr32_64 {
                 let dll64 = app_dir.join("x64").join("asiolink.dll");
                 if dll64.exists() {
-                    let status = Command::new(&regsvr64)
+                    let status = silent_command(&regsvr64)
                         .args(["/s", dll64.to_str().unwrap_or("")])
                         .status()
                         .with_context(|| format!("Failed to run regsvr32 for {}", dll64.display()))?;
@@ -45,7 +43,7 @@ pub fn register_com_libraries(app_dir: &Path) -> Result<()> {
 
         let dll32 = app_dir.join("asiolink.dll");
         if dll32.exists() {
-            let status = Command::new(&regsvr32_32)
+            let status = silent_command(&regsvr32_32)
                 .args(["/s", dll32.to_str().unwrap_or("")])
                 .status()
                 .with_context(|| format!("Failed to run regsvr32 for {}", dll32.display()))?;
@@ -82,7 +80,7 @@ pub fn unregister_com_libraries(app_dir: &Path) -> Result<()> {
             if let Some(regsvr64) = regsvr32_64 {
                 let dll64 = app_dir.join("x64").join("asiolink.dll");
                 if dll64.exists() {
-                    let _ = Command::new(&regsvr64)
+                    let _ = silent_command(&regsvr64)
                         .args(["/s", "/u", dll64.to_str().unwrap_or("")])
                         .status();
                 }
@@ -91,7 +89,7 @@ pub fn unregister_com_libraries(app_dir: &Path) -> Result<()> {
 
         let dll32 = app_dir.join("asiolink.dll");
         if dll32.exists() {
-            let _ = Command::new(&regsvr32_32)
+            let _ = silent_command(&regsvr32_32)
                 .args(["/s", "/u", dll32.to_str().unwrap_or("")])
                 .status();
         }

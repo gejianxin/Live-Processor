@@ -4,7 +4,7 @@ use std::path::Path;
 #[cfg(windows)]
 use anyhow::Context;
 #[cfg(windows)]
-use std::process::Command;
+use crate::config::silent_command;
 
 /// Grant Builtin Users (S-1-5-32-545) Full Control on a file path
 pub fn grant_users_full_access_file(path: &Path) -> Result<()> {
@@ -14,7 +14,7 @@ pub fn grant_users_full_access_file(path: &Path) -> Result<()> {
 
     #[cfg(windows)]
     {
-        let status = Command::new("icacls")
+        let status = silent_command("icacls")
             .arg(path.as_os_str())
             .args(["/grant", "*S-1-5-32-545:(F)"])
             .stdout(std::process::Stdio::null())
@@ -23,7 +23,7 @@ pub fn grant_users_full_access_file(path: &Path) -> Result<()> {
             .with_context(|| format!("Failed to run icacls on {}", path.display()))?;
 
         if !status.success() {
-            let _ = Command::new("icacls")
+            let _ = silent_command("icacls")
                 .arg(path.as_os_str())
                 .args(["/grant", "Users:(F)"])
                 .status();
@@ -71,7 +71,7 @@ foreach ($k in $keys) {
 }
 "#;
 
-        let _ = Command::new("powershell")
+        let _ = silent_command("powershell")
             .args(["-NoProfile", "-NonInteractive", "-Command", script])
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())

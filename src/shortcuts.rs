@@ -1,10 +1,10 @@
 use anyhow::Result;
 use std::fs;
 use std::path::Path;
-#[cfg(windows)]
-use std::process::Command;
 
 use crate::config::{get_start_menu_programs_dir, is_64bit_os};
+#[cfg(windows)]
+use crate::config::silent_command;
 
 #[allow(unused_variables)]
 pub fn create_shortcut(
@@ -37,7 +37,7 @@ $s.Save();
                 .unwrap_or_default()
         );
 
-        let _ = Command::new("powershell")
+        let _ = silent_command("powershell")
             .args(["-NoProfile", "-NonInteractive", "-Command", &script])
             .status();
     }

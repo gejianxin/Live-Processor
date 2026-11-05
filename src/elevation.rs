@@ -1,10 +1,12 @@
 use anyhow::{bail, Result};
 use std::process::Command;
+#[cfg(windows)]
+use crate::config::silent_command;
 
 pub fn is_elevated() -> bool {
     #[cfg(windows)]
     {
-        let output = Command::new("net")
+        let output = silent_command("net")
             .arg("session")
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())

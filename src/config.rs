@@ -167,3 +167,17 @@ pub fn get_start_menu_programs_dir() -> PathBuf {
         }
     }
 }
+
+
+/// Spawns a Command without showing a console window on Windows.
+pub fn silent_command<P: AsRef<std::ffi::OsStr>>(program: P) -> std::process::Command {
+    #[allow(unused_mut)]
+    let mut cmd = std::process::Command::new(program);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    cmd
+}

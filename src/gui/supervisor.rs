@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use egui::{Color32, Stroke, Ui};
 
 use crate::config::{is_64bit_os, DeviceLayout, DEFAULT_START_MENU_GROUP};
@@ -10,13 +11,47 @@ use crate::registry::{
 };
 use crate::security::{grant_users_full_access_file, grant_users_full_access_registry};
 #[cfg(windows)]
-use crate::task::verify_registry_fix_task;
-use crate::task::install_registry_fix_task;
+use crate::task::{install_registry_fix_task, verify_registry_fix_task};
 use crate::uninstaller::{run_uninstall, UninstallOptions};
+
+pub struct SystemAuditState {
+    pub is_installed: bool,
+    pub install_dir: Option<PathBuf>,
+    pub is_64bit: bool,
+    pub service_status: String,
+    pub num_devices: Option<u32>,
+    pub num_channels: Option<u32>,
+    pub ci_policy_applied: bool,
+    pub task_verified: bool,
+}
+
+impl SystemAuditState {
+    pub fn probe() -> Self {
+        let info = get_installed_info();
+        let is_64bit = is_64bit_os();
+        let service_status = query_driver_service_status().unwrap_or_else(|| tr("未启动", "Inactive").to_string());
+        #[cfg(windows)]
+        let task_verified = verify_registry_fix_task();
+        #[cfg(not(windows))]
+        let task_verified = true;
+
+        Self {
+            is_installed: info.install_dir.is_some(),
+            install_dir: info.install_dir.map(PathBuf::from),
+            is_64bit,
+            service_status,
+            num_devices: info.num_devices,
+            num_channels: info.num_channels,
+            ci_policy_applied: info.ci_policy_applied,
+            task_verified,
+        }
+    }
+}
 
 pub struct SupervisorView {
     pub selected_layout: DeviceLayout,
     pub logs: Vec<String>,
+    pub audit: SystemAuditState,
 }
 
 impl Default for SupervisorView {
@@ -24,192 +59,264 @@ impl Default for SupervisorView {
         Self {
             selected_layout: DeviceLayout::Layout4x8,
             logs: vec![
-                "[SYSTEM] Live-Processor 守护引擎已初始化就绪。".to_string(),
-                "[AUDIT] 正在扫描系统驱动、设备配置与代码完整性保护...".to_string(),
+                format!("[SYSTEM] {} - {}", tr("Live-Processor 驱动与系统守护中心已就绪", "Live-Processor Supervisor Ready"), tr("安全模式已加载", "Secure Mode Loaded")),
             ],
+            audit: SystemAuditState::probe(),
         }
     }
 }
 
 impl SupervisorView {
+    pub fn refresh_audit(&mut self) {
+        self.audit = SystemAuditState::probe();
+        self.log(tr("[AUDIT] 系统状态诊断数据已刷新。", "[AUDIT] System status diagnostics refreshed."));
+    }
+
     pub fn render(&mut self, ui: &mut Ui) {
+        let avail_w = ui.available_width();
+
         ui.vertical(|ui| {
-            ui.heading(
-                egui::RichText::new(tr("🛡️ 驱动管理与系统守护中心", "🛡️ System & Driver Supervisor"))
-                    .color(Color32::from_rgb(0, 220, 255))
-                    .strong(),
-            );
-            ui.add_space(8.0);
+            // Header Row
+            ui.horizontal(|ui| {
+                ui.heading(
+                    egui::RichText::new(tr("驱动运维与系统守护中心", "Driver & System Supervisor"))
+                        .color(Color32::from_rgb(230, 236, 244))
+                        .strong(),
+                );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.button(egui::RichText::new(tr("🔄 刷新状态", "🔄 Refresh Status")).size(12.0)).clicked() {
+                        self.refresh_audit();
+                    }
+                });
+            });
+
+            ui.add_space(4.0);
             ui.label(
                 egui::RichText::new(tr(
-                    "全生命周期管理 ASIO Link Pro 音频驱动、Windows 代码完整性保护策略 (CI Policy) 以及自主自愈任务。",
-                    "Manage ASIO Link Pro driver lifecycle, Code Integrity protection policy, and autonomous self-heal tasks."
+                    "管理 ASIO Link Pro 内核驱动生命周期、Windows 代码完整性保护策略 (CI Policy) 及自主自愈任务。",
+                    "Manage ASIO Link Pro driver lifecycle, Windows Code Integrity policy, and autonomous self-heal tasks."
                 ))
-                .color(Color32::from_rgb(160, 175, 195))
+                .color(Color32::from_rgb(138, 148, 162))
                 .small(),
             );
-            ui.add_space(12.0);
+            ui.add_space(14.0);
 
-            let info = get_installed_info();
-            let is_64bit = is_64bit_os();
+            // 1. Pro Status Cards (Full-Width Responsive 3-Column Layout)
+            let card_spacing = 12.0;
+            let col_w = ((avail_w - card_spacing * 2.0) / 3.0).max(180.0);
 
-            // Status Cards Grid
-            ui.columns(3, |columns| {
-                // Column 1: Driver status
-                columns[0].group(|ui| {
-                    ui.set_min_height(140.0);
-                    ui.label(egui::RichText::new(tr("内核驱动状态", "Kernel Driver")).strong().color(Color32::from_rgb(0, 210, 255)));
-                    ui.add_space(4.0);
-                    let installed = info.install_dir.is_some();
-                    ui.label(format!("{}: {}", tr("安装状态", "Installed"), if installed { tr("已安装 [正常]", "YES [Active]") } else { tr("未安装", "Not Installed") }));
-                    ui.label(format!("{}: {}", tr("系统架构", "Architecture"), if is_64bit { "64位 (x64)" } else { "32位 (x86)" }));
-                    let svc = query_driver_service_status().unwrap_or_else(|| tr("未启动", "Inactive").to_string());
-                    ui.label(format!("{}: {}", tr("驱动服务", "Service"), svc));
-                });
+            ui.horizontal(|ui| {
+                // Card 1: Kernel Driver
+                render_status_card(
+                    ui,
+                    col_w,
+                    tr("内核驱动引擎", "Kernel Driver"),
+                    if self.audit.is_installed { tr("运行正常", "ACTIVE") } else { tr("未安装", "NOT FOUND") },
+                    self.audit.is_installed,
+                    |ui| {
+                        let path_str = self.audit.install_dir.as_ref()
+                            .map(|p| p.to_string_lossy().to_string())
+                            .unwrap_or_else(|| tr("未就绪", "None").to_string());
+                        render_kv(ui, tr("安装路径", "Path"), &truncate_str(&path_str, 24));
+                        render_kv(ui, tr("系统架构", "Arch"), if self.audit.is_64bit { "64-bit (x64)" } else { "32-bit (x86)" });
+                        render_kv(ui, tr("服务状态", "Service"), &self.audit.service_status);
+                    },
+                );
 
-                // Column 2: WDM Layout
-                columns[1].group(|ui| {
-                    ui.set_min_height(140.0);
-                    ui.label(egui::RichText::new(tr("WDM 设备声道布局", "WDM Device Layout")).strong().color(Color32::from_rgb(255, 170, 0)));
-                    ui.add_space(4.0);
-                    match (info.num_devices, info.num_channels) {
-                        (Some(d), Some(c)) => {
-                            ui.label(format!("{}: {} {} / {} {}", tr("当前配置", "Configured"), d, tr("设备", "Devices"), c, tr("声道", "Channels")));
-                            if d == 16 {
-                                ui.label(tr("模式: 16 独立立体声设备", "Mode: 16 Stereo WDM Devices"));
-                            } else {
-                                ui.label(tr("模式: 4 设备 / 8 声道 (默认推荐)", "Mode: 4 Devices / 8 Channels (Default)"));
-                            }
+                ui.add_space(card_spacing);
+
+                // Card 2: WDM Layout
+                let (has_cfg, cfg_title) = match (self.audit.num_devices, self.audit.num_channels) {
+                    (Some(16), _) => (true, tr("16 立体声模式", "16-Stereo Mode").to_string()),
+                    (Some(4), _) => (true, tr("4x8 声道默认模式", "4x8 Channels Mode").to_string()),
+                    (Some(d), Some(c)) => (true, format!("{}x{} {}", d, c, tr("模式", "Mode"))),
+                    _ => (false, tr("未写入配置", "Unconfigured").to_string()),
+                };
+
+                render_status_card(
+                    ui,
+                    col_w,
+                    tr("WDM 声道布局", "WDM Layout"),
+                    &cfg_title,
+                    has_cfg,
+                    |ui| {
+                        let dev_text = self.audit.num_devices.map(|d| format!("{} {}", d, tr("个设备", "devices"))).unwrap_or_else(|| tr("默认 4", "Default 4").to_string());
+                        let ch_text = self.audit.num_channels.map(|c| format!("{} {}", c, tr("个声道", "channels"))).unwrap_or_else(|| tr("默认 8", "Default 8").to_string());
+                        render_kv(ui, tr("设备数量", "Devices"), &dev_text);
+                        render_kv(ui, tr("声道规格", "Channels"), &ch_text);
+                        render_kv(ui, tr("推荐用途", "Best For"), if self.audit.num_devices == Some(16) { tr("多音轨多端分流", "Multi-app split") } else { tr("宿主与直播混合", "DAW & Live mix") });
+                    },
+                );
+
+                ui.add_space(card_spacing);
+
+                // Card 3: Code Integrity & Self-Heal Task
+                #[cfg(windows)]
+                let ci_ok = self.audit.ci_policy_applied && self.audit.task_verified;
+                #[cfg(not(windows))]
+                let ci_ok = true;
+
+                render_status_card(
+                    ui,
+                    col_w,
+                    tr("代码完整性自愈", "Code Integrity"),
+                    if ci_ok { tr("已受守护", "PROTECTED") } else { tr("需快速修复", "UNPROTECTED") },
+                    ci_ok,
+                    |ui| {
+                        #[cfg(windows)]
+                        {
+                            render_kv(ui, "UpgradedSystem", if self.audit.ci_policy_applied { "1 (Active)" } else { "0 (Inactive)" });
+                            render_kv(ui, tr("开机守护任务", "Heal Task"), if self.audit.task_verified { tr("已启用 [正常]", "Registered") } else { tr("缺失", "Missing") });
+                            render_kv(ui, tr("切音保护", "Anti-Cutout"), if ci_ok { tr("持续守护中", "Enabled") } else { tr("可能产生切音", "Warning: Cutouts") });
                         }
-                        _ => {
-                            ui.label(tr("当前配置: 默认模式 (未写入)", "Configured: Default Layout (Unset)"));
+                        #[cfg(not(windows))]
+                        {
+                            render_kv(ui, tr("系统环境", "Platform"), "Linux Native");
+                            render_kv(ui, tr("内核驱动", "Kernel Mode"), "ALSA / PipeWire");
+                            render_kv(ui, tr("权限隔离", "Sandboxing"), tr("已放行", "Unrestricted"));
                         }
-                    }
-                });
-
-                // Column 3: Code Integrity & Self-Heal Task
-                columns[2].group(|ui| {
-                    ui.set_min_height(140.0);
-                    ui.label(egui::RichText::new(tr("代码完整性自愈保护", "Code Integrity Self-Heal")).strong().color(Color32::from_rgb(0, 230, 120)));
-                    ui.add_space(4.0);
-                    #[cfg(windows)]
-                    {
-                        ui.label(format!("{}: {}", tr("CI 注册表策略", "CI Policy (UpgradedSystem)"), if info.ci_policy_applied { tr("1 [已受保护]", "1 (Protected)") } else { tr("未激活", "Disabled") }));
-                        let task_ok = verify_registry_fix_task();
-                        ui.label(format!("{}: {}", tr("自主守护任务", "Autonomous Task"), if task_ok { tr("已激活并验证", "Active & Verified") } else { tr("未配置", "Not Active") }));
-                    }
-                    #[cfg(not(windows))]
-                    {
-                        ui.label(tr("运行环境: 原生 Linux", "Host OS: Native Linux"));
-                        ui.label(tr("代码签名策略: 无限制", "Code Integrity: Unrestricted"));
-                    }
-                });
+                    },
+                );
             });
 
             ui.add_space(14.0);
 
-            // Management Actions Section
-            ui.group(|ui| {
-                ui.label(egui::RichText::new(tr("快捷运维与管理操作", "Operations & Management")).strong().size(13.0));
-                ui.add_space(8.0);
+            // 2. Action Toolbar Section
+            egui::Frame::NONE
+                .fill(Color32::from_rgb(22, 25, 31))
+                .stroke(Stroke::new(1.0, Color32::from_rgb(38, 44, 54)))
+                .inner_margin(12.0)
+                .corner_radius(egui::CornerRadius::same(4))
+                .show(ui, |ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(egui::RichText::new(tr("声道布局切换:", "Target Layout:")).color(Color32::from_rgb(160, 172, 188)));
+                        egui::ComboBox::from_id_salt("layout_selector")
+                            .selected_text(self.selected_layout.description())
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(&mut self.selected_layout, DeviceLayout::Layout4x8, DeviceLayout::Layout4x8.description());
+                                ui.selectable_value(&mut self.selected_layout, DeviceLayout::Layout16x2, DeviceLayout::Layout16x2.description());
+                            });
 
-                ui.horizontal_wrapped(|ui| {
-                    // Layout selection combo
-                    ui.label(tr("目标布局:", "Target Layout:"));
-                    egui::ComboBox::from_id_salt("layout_combo")
-                        .selected_text(self.selected_layout.description())
-                        .show_ui(ui, |ui| {
-                            ui.selectable_value(&mut self.selected_layout, DeviceLayout::Layout4x8, DeviceLayout::Layout4x8.description());
-                            ui.selectable_value(&mut self.selected_layout, DeviceLayout::Layout16x2, DeviceLayout::Layout16x2.description());
-                        });
+                        ui.add_space(12.0);
 
-                    ui.add_space(10.0);
-
-                    if ui.button(egui::RichText::new(tr("🚀 安装 / 升级驱动", "🚀 Install / Upgrade Driver")).color(Color32::from_rgb(0, 230, 140)).strong()).clicked() {
-                        self.log(tr("正在启动驱动安装流水线...", "Starting installation pipeline..."));
-                        let opts = InstallOptions {
-                            install_dir: None,
-                            layout: self.selected_layout,
-                            create_shortcuts: true,
-                            start_menu_group: DEFAULT_START_MENU_GROUP.to_string(),
-                            custom_payload_path: None,
-                            silent: true,
-                        };
-                        match run_install(opts) {
-                            Ok(_) => self.log(tr("[成功] 驱动程序及运行时组件安装成功！", "[SUCCESS] Driver and components installed successfully!")),
-                            Err(e) => self.log(&format!("{}: {}", tr("[错误] 安装失败", "[ERROR] Install failed"), e)),
+                        // Install Button
+                        if ui.button(egui::RichText::new(tr("安装 / 升级驱动", "Install / Upgrade")).strong()).clicked() {
+                            self.log(tr("正在执行驱动部署流程...", "Executing driver deployment..."));
+                            let opts = InstallOptions {
+                                install_dir: None,
+                                layout: self.selected_layout,
+                                create_shortcuts: true,
+                                start_menu_group: DEFAULT_START_MENU_GROUP.to_string(),
+                                custom_payload_path: None,
+                                silent: true,
+                            };
+                            match run_install(opts) {
+                                Ok(_) => {
+                                    self.log(tr("[成功] 驱动程序及运行时组件安装成功！", "[SUCCESS] Driver installed successfully!"));
+                                    self.refresh_audit();
+                                }
+                                Err(e) => self.log(&format!("{}: {}", tr("[错误] 安装失败", "[ERROR] Install failed"), e)),
+                            }
                         }
-                    }
 
-                    if ui.button(egui::RichText::new(tr("⚡ 一键快速修复", "⚡ Quick Repair")).color(Color32::from_rgb(0, 210, 255))).clicked() {
-                        self.log(tr("正在重新应用 CI 代码完整性注册表策略与开机自愈计划任务...", "Applying Code Integrity Policy fix and self-heal task..."));
-                        let _ = apply_code_integrity_policy_fix();
-                        let _ = install_registry_fix_task();
-                        let dat_file = crate::config::get_system_drivers_dir().join("asiovadpro.dat");
-                        let _ = grant_users_full_access_file(&dat_file);
-                        let _ = grant_users_full_access_registry();
-                        self.log(tr("[成功] 快速修复已执行完毕，系统已受保护。", "[SUCCESS] Quick repair completed successfully."));
-                    }
-
-                    if ui.button(egui::RichText::new(tr("🔄 热切换设备布局", "🔄 Switch Layout")).color(Color32::from_rgb(255, 170, 0))).clicked() {
-                        self.log(&format!("{} {}...", tr("正在切换设备声道布局为", "Switching device layout to"), self.selected_layout.description()));
-                        let opts = InstallOptions {
-                            install_dir: None,
-                            layout: self.selected_layout,
-                            create_shortcuts: true,
-                            start_menu_group: DEFAULT_START_MENU_GROUP.to_string(),
-                            custom_payload_path: None,
-                            silent: true,
-                        };
-                        match run_install(opts) {
-                            Ok(_) => self.log(tr("[成功] 声道布局已成功切换！", "[SUCCESS] Layout switched successfully!")),
-                            Err(e) => self.log(&format!("{}: {}", tr("[错误] 声道布局切换失败", "[ERROR] Layout switch failed"), e)),
+                        // Quick Fix Button
+                        if ui.button(egui::RichText::new(tr("应用代码完整性自愈修复", "Apply Self-Heal Fix")).color(Color32::from_rgb(56, 189, 248)).strong()).clicked() {
+                            self.log(tr("正在重新应用 CI 代码完整性注册表策略与自主自愈计划任务...", "Applying Code Integrity policy and scheduled task..."));
+                            let _ = apply_code_integrity_policy_fix();
+                            #[cfg(windows)]
+                            let _ = install_registry_fix_task();
+                            let dat_file = crate::config::get_system_drivers_dir().join("asiovadpro.dat");
+                            let _ = grant_users_full_access_file(&dat_file);
+                            let _ = grant_users_full_access_registry();
+                            self.log(tr("[成功] 快速修复已执行完毕，系统已受保护。", "[SUCCESS] Quick repair completed successfully."));
+                            self.refresh_audit();
                         }
-                    }
 
-                    if ui.button(tr("📦 导出内置驱动包", "📦 Extract Payload")).clicked() {
-                        let out_dir = std::path::PathBuf::from("./extracted_payload");
-                        if let Ok(source) = PayloadSource::new(None) {
-                            let _ = source.extract_all_to(&out_dir);
-                            self.log(&format!("{}: {}", tr("[成功] 驱动资源已解包至", "[SUCCESS] Extracted payload to"), out_dir.display()));
+                        // Layout Switch Button
+                        if ui.button(tr("切换设备布局", "Switch Layout")).clicked() {
+                            self.log(&format!("{} {}...", tr("正在切换设备声道布局为", "Switching layout to"), self.selected_layout.description()));
+                            let opts = InstallOptions {
+                                install_dir: None,
+                                layout: self.selected_layout,
+                                create_shortcuts: true,
+                                start_menu_group: DEFAULT_START_MENU_GROUP.to_string(),
+                                custom_payload_path: None,
+                                silent: true,
+                            };
+                            match run_install(opts) {
+                                Ok(_) => {
+                                    self.log(tr("[成功] 声道布局已成功切换！", "[SUCCESS] Layout switched successfully!"));
+                                    self.refresh_audit();
+                                }
+                                Err(e) => self.log(&format!("{}: {}", tr("[错误] 声道布局切换失败", "[ERROR] Layout switch failed"), e)),
+                            }
                         }
-                    }
 
-                    if ui.button(egui::RichText::new(tr("🗑️ 彻底卸载驱动", "🗑️ Uninstall Driver")).color(Color32::from_rgb(255, 80, 80))).clicked() {
-                        self.log(tr("正在启动卸载清理流程...", "Starting uninstallation pipeline..."));
-                        let opts = UninstallOptions {
-                            app_dir: None,
-                            delete_all_settings: true,
-                            silent: true,
-                        };
-                        match run_uninstall(opts) {
-                            Ok(_) => self.log(tr("[成功] 卸载与清理完成。", "[SUCCESS] Uninstalled successfully.")),
-                            Err(e) => self.log(&format!("{}: {}", tr("[错误] 卸载失败", "[ERROR] Uninstall failed"), e)),
+                        // Extract Payload Button
+                        if ui.button(tr("解包提取驱动", "Extract Payload")).clicked() {
+                            let out_dir = std::path::PathBuf::from("./extracted_payload");
+                            if let Ok(source) = PayloadSource::new(None) {
+                                let _ = source.extract_all_to(&out_dir);
+                                self.log(&format!("{}: {}", tr("[成功] 驱动资源已解包至", "[SUCCESS] Extracted payload to"), out_dir.display()));
+                            }
                         }
+
+                        // Uninstall Button
+                        if ui.button(egui::RichText::new(tr("卸载驱动与清理", "Uninstall Driver")).color(Color32::from_rgb(248, 113, 113))).clicked() {
+                            self.log(tr("正在执行驱动卸载流程...", "Executing uninstallation..."));
+                            let opts = UninstallOptions {
+                                app_dir: None,
+                                delete_all_settings: true,
+                                silent: true,
+                            };
+                            match run_uninstall(opts) {
+                                Ok(_) => {
+                                    self.log(tr("[成功] 卸载与清理完成。", "[SUCCESS] Uninstallation completed."));
+                                    self.refresh_audit();
+                                }
+                                Err(e) => self.log(&format!("{}: {}", tr("[错误] 卸载失败", "[ERROR] Uninstall failed"), e)),
+                            }
+                        }
+                    });
+                });
+
+            ui.add_space(14.0);
+
+            // 3. Diagnostics & Activity Log Box (Responsive Full Height & Width)
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new(tr("活动审计与驱动诊断日志", "Activity & Diagnostic Logs")).strong().size(12.0).color(Color32::from_rgb(200, 210, 225)));
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.button(egui::RichText::new(tr("清空日志", "Clear")).size(10.0)).clicked() {
+                        self.logs.clear();
                     }
                 });
             });
 
-            ui.add_space(10.0);
+            ui.add_space(4.0);
 
-            // Log Console Box
-            ui.label(egui::RichText::new(tr("活动诊断与审计日志", "Activity & Diagnostics Log")).strong().size(12.0));
+            let remaining_h = (ui.available_height() - 8.0).max(140.0);
+
             egui::Frame::NONE
-                .fill(Color32::from_rgb(12, 14, 18))
-                .stroke(Stroke::new(1.0, Color32::from_rgb(32, 38, 48)))
-                .inner_margin(8.0)
+                .fill(Color32::from_rgb(14, 16, 20))
+                .stroke(Stroke::new(1.0, Color32::from_rgb(34, 40, 50)))
+                .corner_radius(egui::CornerRadius::same(4))
+                .inner_margin(10.0)
                 .show(ui, |ui| {
                     egui::ScrollArea::vertical()
-                        .max_height(140.0)
+                        .min_scrolled_height(remaining_h)
                         .auto_shrink([false, false])
+                        .stick_to_bottom(true)
                         .show(ui, |ui| {
+                            ui.set_width(ui.available_width());
                             for line in &self.logs {
                                 let color = if line.contains("[SUCCESS]") || line.contains("[成功]") {
-                                    Color32::from_rgb(0, 230, 140)
+                                    Color32::from_rgb(52, 211, 153) // Subtle emerald
                                 } else if line.contains("[ERROR]") || line.contains("[错误]") {
-                                    Color32::from_rgb(255, 80, 80)
+                                    Color32::from_rgb(248, 113, 113) // Soft coral red
+                                } else if line.contains("[AUDIT]") {
+                                    Color32::from_rgb(56, 189, 248) // Clean sky blue
                                 } else {
-                                    Color32::from_rgb(180, 195, 215)
+                                    Color32::from_rgb(156, 168, 184)
                                 };
                                 ui.label(egui::RichText::new(line).color(color).monospace().size(11.0));
                             }
@@ -220,5 +327,64 @@ impl SupervisorView {
 
     fn log(&mut self, msg: &str) {
         self.logs.push(msg.to_string());
+    }
+}
+
+fn render_status_card(
+    ui: &mut Ui,
+    width: f32,
+    title: &str,
+    status_label: &str,
+    is_positive: bool,
+    body: impl FnOnce(&mut Ui),
+) {
+    egui::Frame::NONE
+        .fill(Color32::from_rgb(24, 28, 35))
+        .stroke(Stroke::new(1.0, Color32::from_rgb(40, 47, 58)))
+        .corner_radius(egui::CornerRadius::same(6))
+        .inner_margin(12.0)
+        .show(ui, |ui| {
+            ui.set_width(width);
+            ui.set_min_height(130.0);
+
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new(title).strong().size(13.0).color(Color32::from_rgb(220, 228, 238)));
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let (badge_bg, badge_fg) = if is_positive {
+                        (Color32::from_rgb(16, 48, 36), Color32::from_rgb(52, 211, 153))
+                    } else {
+                        (Color32::from_rgb(48, 32, 24), Color32::from_rgb(245, 158, 11))
+                    };
+                    egui::Frame::NONE
+                        .fill(badge_bg)
+                        .corner_radius(egui::CornerRadius::same(3))
+                        .inner_margin(egui::Margin::symmetric(6, 2))
+                        .show(ui, |ui| {
+                            ui.label(egui::RichText::new(status_label).size(10.0).strong().color(badge_fg));
+                        });
+                });
+            });
+
+            ui.add_space(8.0);
+            ui.separator();
+            ui.add_space(6.0);
+
+            body(ui);
+        });
+}
+
+fn render_kv(ui: &mut Ui, key: &str, val: &str) {
+    ui.horizontal(|ui| {
+        ui.label(egui::RichText::new(format!("{}:", key)).size(11.0).color(Color32::from_rgb(120, 132, 148)));
+        ui.label(egui::RichText::new(val).size(11.0).color(Color32::from_rgb(205, 215, 228)));
+    });
+}
+
+fn truncate_str(s: &str, max_len: usize) -> String {
+    if s.chars().count() > max_len {
+        let truncated: String = s.chars().take(max_len - 3).collect();
+        format!("{}...", truncated)
+    } else {
+        s.to_string()
     }
 }
