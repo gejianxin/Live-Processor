@@ -26,6 +26,7 @@ pub struct LiveProcessorApp {
     pub panic_muted: bool,
     pub sample_rate: u32,
     pub buffer_size: u32,
+    pub has_centered: bool,
 }
 
 impl LiveProcessorApp {
@@ -40,36 +41,41 @@ impl LiveProcessorApp {
             panic_muted: false,
             sample_rate: 48000,
             buffer_size: 256,
+            has_centered: false,
         }
     }
 }
 
 impl eframe::App for LiveProcessorApp {
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
+        // Automatically center the window on screen at startup
+        if !self.has_centered {
+            if let Some(cmd) = egui::ViewportCommand::center_on_screen(ui.ctx()) {
+                ui.ctx().send_viewport_cmd(cmd);
+                self.has_centered = true;
+            }
+        }
+
         let time = ui.ctx().input(|i| i.time);
         ui.ctx().request_repaint_after(std::time::Duration::from_millis(30));
 
-        let avail_w = ui.available_width();
-
-        // 1. Sleek Minimalist Top Header
+        // 1. Top Control Header
         egui::Frame::NONE
-            .fill(Color32::from_rgb(20, 23, 28))
-            .stroke(Stroke::new(1.0, Color32::from_rgb(36, 42, 52)))
+            .fill(Color32::from_rgb(20, 23, 29))
+            .stroke(Stroke::new(1.0, Color32::from_rgb(36, 42, 54)))
             .inner_margin(egui::Margin::symmetric(14, 10))
             .show(ui, |ui| {
-                ui.set_width(avail_w);
                 self.render_header(ui, time);
             });
 
         ui.add_space(4.0);
 
         // 2. Central Full-Screen Workspace Area
-        let available_space = (ui.available_height() - 34.0).max(200.0);
+        let available_space = (ui.available_height() - 36.0).max(200.0);
         egui::Frame::NONE
-            .fill(Color32::from_rgb(18, 20, 24))
+            .fill(Color32::from_rgb(17, 19, 24))
             .inner_margin(12.0)
             .show(ui, |ui| {
-                ui.set_width(avail_w);
                 ui.set_min_height(available_space);
 
                 match self.active_tab {
@@ -82,13 +88,12 @@ impl eframe::App for LiveProcessorApp {
 
         ui.add_space(2.0);
 
-        // 3. Bottom Minimalist Status Bar
+        // 3. Bottom Status Bar
         egui::Frame::NONE
             .fill(Color32::from_rgb(15, 17, 21))
-            .stroke(Stroke::new(1.0, Color32::from_rgb(30, 35, 44)))
-            .inner_margin(egui::Margin::symmetric(12, 6))
+            .stroke(Stroke::new(1.0, Color32::from_rgb(30, 35, 46)))
+            .inner_margin(egui::Margin::symmetric(14, 6))
             .show(ui, |ui| {
-                ui.set_width(avail_w);
                 self.render_status_bar(ui);
             });
     }
@@ -97,7 +102,7 @@ impl eframe::App for LiveProcessorApp {
 impl LiveProcessorApp {
     fn render_header(&mut self, ui: &mut Ui, time: f64) {
         ui.horizontal(|ui| {
-            // Heartbeat indicator & Logo
+            // Heartbeat pulse dot & Brand Logo
             let pulse = ((time * 3.0).sin() * 0.15 + 0.85) as f32;
             let dot_color = if self.panic_muted {
                 Color32::from_rgb(248, 113, 113)
@@ -113,8 +118,8 @@ impl LiveProcessorApp {
             ui.label(
                 egui::RichText::new("LIVE-PROCESSOR")
                     .strong()
-                    .size(14.0)
-                    .color(Color32::from_rgb(230, 236, 244)),
+                    .size(13.5)
+                    .color(Color32::from_rgb(235, 240, 248)),
             );
             egui::Frame::NONE
                 .fill(Color32::from_rgb(28, 36, 48))
@@ -129,37 +134,39 @@ impl LiveProcessorApp {
                     );
                 });
 
-            ui.add_space(16.0);
+            ui.add_space(14.0);
 
-            // Tab Navigation Switcher (Minimalist segmented style)
+            // Tab Navigation Switcher (Studio console style)
             render_nav_tab(ui, &mut self.active_tab, ActiveTab::Matrix, tr("跳线矩阵", "Wire Matrix"));
             render_nav_tab(ui, &mut self.active_tab, ActiveTab::Rack, tr("虚拟机架", "Virtual Rack"));
             render_nav_tab(ui, &mut self.active_tab, ActiveTab::Supervisor, tr("驱动与守护", "Supervisor"));
             render_nav_tab(ui, &mut self.active_tab, ActiveTab::Snapshots, tr("现场快照", "Show Cues"));
 
-            // Right-aligned audio controls
+            // Right-aligned audio controls with guaranteed padding
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.add_space(6.0); // Safety right margin to prevent window border clipping
+
                 // Language Switcher Button
                 let lang_label = match Language::current() {
                     Language::Chinese => "🌐 简体中文",
                     Language::English => "🌐 English",
                 };
-                if ui.button(egui::RichText::new(lang_label).size(11.0).color(Color32::from_rgb(180, 192, 210))).clicked() {
+                if ui.button(egui::RichText::new(lang_label).size(10.5).color(Color32::from_rgb(180, 192, 210))).clicked() {
                     Language::toggle();
                 }
 
-                ui.add_space(10.0);
+                ui.add_space(8.0);
 
                 // Panic Button
                 let panic_text = if self.panic_muted {
-                    tr("已紧急静音", "PANIC MUTED")
+                    tr("已紧急静音", "MUTED")
                 } else {
                     tr("紧急静音", "PANIC")
                 };
                 let panic_btn = egui::Button::new(
                     egui::RichText::new(panic_text)
                         .strong()
-                        .size(11.0)
+                        .size(10.5)
                         .color(if self.panic_muted { Color32::WHITE } else { Color32::from_rgb(248, 113, 113) }),
                 )
                 .fill(if self.panic_muted {
@@ -173,21 +180,21 @@ impl LiveProcessorApp {
                     self.panic_muted = !self.panic_muted;
                 }
 
+                ui.add_space(8.0);
+
+                // Master Volume Slider & dB text
+                ui.label(egui::RichText::new(format!("{:+.1} dB", self.master_volume)).size(10.5).monospace().color(Color32::from_rgb(56, 189, 248)));
+                ui.add_sized([60.0, 16.0], egui::Slider::new(&mut self.master_volume, -40.0..=6.0).show_value(false));
+                ui.label(egui::RichText::new(tr("总音量:", "Master:")).size(10.5).color(Color32::from_rgb(120, 130, 145)));
+
                 ui.add_space(10.0);
 
-                // Master Volume Slider
-                ui.label(egui::RichText::new(format!("{:+.1} dB", self.master_volume)).size(11.0).monospace().color(Color32::from_rgb(56, 189, 248)));
-                ui.add(egui::Slider::new(&mut self.master_volume, -40.0..=6.0).show_value(false));
-                ui.label(egui::RichText::new(tr("总输出", "Master")).size(11.0).color(Color32::from_rgb(130, 140, 155)));
-
-                ui.add_space(14.0);
-
-                // Sample Rate & Buffer Latency
+                // Latency Badge
                 let latency_ms = (self.buffer_size as f32 / self.sample_rate as f32) * 1000.0;
                 let badge_text = format!("{} Hz | {} smp (~{:.1} ms)", self.sample_rate, self.buffer_size, latency_ms);
                 ui.label(
                     egui::RichText::new(badge_text)
-                        .size(11.0)
+                        .size(10.5)
                         .color(Color32::from_rgb(52, 211, 153))
                         .monospace(),
                 );
@@ -206,19 +213,20 @@ impl LiveProcessorApp {
             ui.separator();
 
             ui.label(
-                egui::RichText::new(tr("ASIO Link Pro 2.4.4.2 [Give Academy 终身补丁]", "ASIO Link Pro 2.4.4.2 [Give Academy Patched]"))
+                egui::RichText::new(tr("ASIO Link Pro 2.4.4.2 [Give Academy 终身补丁已集成]", "ASIO Link Pro 2.4.4.2 [Give Academy Patched]"))
                     .size(10.5)
-                    .color(Color32::from_rgb(180, 192, 210)),
+                    .color(Color32::from_rgb(175, 188, 205)),
             );
             ui.separator();
 
             #[cfg(windows)]
-            ui.label(egui::RichText::new(tr("CI 代码完整性 UpgradedSystem=1 [正常守护]", "CI Policy UpgradedSystem = 1 [PROTECTED]")).size(10.5).color(Color32::from_rgb(52, 211, 153)));
+            ui.label(egui::RichText::new(tr("CI 代码完整性策略: UpgradedSystem=1 [安全守护中]", "CI Policy UpgradedSystem = 1 [PROTECTED]")).size(10.5).color(Color32::from_rgb(52, 211, 153)));
             #[cfg(not(windows))]
             ui.label(egui::RichText::new(tr("Linux 实时音频子系统已就绪", "Linux Audio Subsystem Ready")).size(10.5).color(Color32::from_rgb(52, 211, 153)));
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.label(egui::RichText::new("Live-Processor v2.4.4").size(10.0).color(Color32::from_rgb(100, 110, 125)));
+                ui.add_space(6.0);
+                ui.label(egui::RichText::new("Live-Processor Pro v2.4.4").size(10.0).color(Color32::from_rgb(100, 110, 125)));
             });
         });
     }
@@ -227,7 +235,7 @@ impl LiveProcessorApp {
 fn render_nav_tab(ui: &mut Ui, current: &mut ActiveTab, tab: ActiveTab, label: &str) {
     let is_selected = *current == tab;
     let text = egui::RichText::new(label)
-        .size(12.0)
+        .size(11.5)
         .color(if is_selected {
             Color32::from_rgb(240, 245, 252)
         } else {
@@ -237,16 +245,16 @@ fn render_nav_tab(ui: &mut Ui, current: &mut ActiveTab, tab: ActiveTab, label: &
 
     let btn = egui::Button::new(text)
         .fill(if is_selected {
-            Color32::from_rgb(32, 40, 52)
+            Color32::from_rgb(32, 40, 54)
         } else {
-            Color32::from_rgb(22, 26, 32)
+            Color32::from_rgb(22, 26, 33)
         })
         .stroke(Stroke::new(
             1.0,
             if is_selected {
                 Color32::from_rgb(56, 189, 248)
             } else {
-                Color32::from_rgb(36, 42, 52)
+                Color32::from_rgb(36, 42, 54)
             },
         ))
         .corner_radius(egui::CornerRadius::same(4));

@@ -347,29 +347,31 @@ fn render_status_card(
             ui.set_width(width);
             ui.set_min_height(130.0);
 
-            ui.horizontal(|ui| {
-                ui.label(egui::RichText::new(title).strong().size(13.0).color(Color32::from_rgb(220, 228, 238)));
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let (badge_bg, badge_fg) = if is_positive {
-                        (Color32::from_rgb(16, 48, 36), Color32::from_rgb(52, 211, 153))
-                    } else {
-                        (Color32::from_rgb(48, 32, 24), Color32::from_rgb(245, 158, 11))
-                    };
-                    egui::Frame::NONE
-                        .fill(badge_bg)
-                        .corner_radius(egui::CornerRadius::same(3))
-                        .inner_margin(egui::Margin::symmetric(6, 2))
-                        .show(ui, |ui| {
-                            ui.label(egui::RichText::new(status_label).size(10.0).strong().color(badge_fg));
-                        });
+            ui.vertical(|ui| {
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new(title).strong().size(13.0).color(Color32::from_rgb(220, 228, 238)));
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let (badge_bg, badge_fg) = if is_positive {
+                            (Color32::from_rgb(16, 48, 36), Color32::from_rgb(52, 211, 153))
+                        } else {
+                            (Color32::from_rgb(48, 32, 24), Color32::from_rgb(245, 158, 11))
+                        };
+                        egui::Frame::NONE
+                            .fill(badge_bg)
+                            .corner_radius(egui::CornerRadius::same(3))
+                            .inner_margin(egui::Margin::symmetric(6, 2))
+                            .show(ui, |ui| {
+                                ui.label(egui::RichText::new(status_label).size(10.0).strong().color(badge_fg));
+                            });
+                    });
                 });
+
+                ui.add_space(8.0);
+                ui.separator();
+                ui.add_space(6.0);
+
+                body(ui);
             });
-
-            ui.add_space(8.0);
-            ui.separator();
-            ui.add_space(6.0);
-
-            body(ui);
         });
 }
 
