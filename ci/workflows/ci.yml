@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cargo Check
+      run: cargo check --verbose
+
+    - name: Build Release
+      run: cargo build --release --verbose
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: live-processor-x86_64-pc-windows-msvc
+        path: target/release/live-processor.exe
