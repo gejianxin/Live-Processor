@@ -14,20 +14,26 @@ jobs:
         include:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            asset_name: live-processor-windows-x64.exe
-            bin: target/x86_64-pc-windows-msvc/release/live-processor.exe
+            bin_gui: target/x86_64-pc-windows-msvc/release/live-processor-gui.exe
+            bin_cli: target/x86_64-pc-windows-msvc/release/live-processor-cli.exe
+            asset_gui: live-processor-gui-windows-x64.exe
+            asset_cli: live-processor-cli-windows-x64.exe
             use_cross: false
 
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            asset_name: live-processor-linux-x64
-            bin: target/x86_64-unknown-linux-gnu/release/live-processor
+            bin_gui: target/x86_64-unknown-linux-gnu/release/live-processor-gui
+            bin_cli: target/x86_64-unknown-linux-gnu/release/live-processor-cli
+            asset_gui: live-processor-gui-linux-x64
+            asset_cli: live-processor-cli-linux-x64
             use_cross: false
 
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
-            asset_name: live-processor-linux-arm64
-            bin: target/aarch64-unknown-linux-gnu/release/live-processor
+            bin_gui: target/aarch64-unknown-linux-gnu/release/live-processor-gui
+            bin_cli: target/aarch64-unknown-linux-gnu/release/live-processor-cli
+            asset_gui: live-processor-gui-linux-arm64
+            asset_cli: live-processor-cli-linux-arm64
             use_cross: true
 
     runs-on: ${{ matrix.os }}
@@ -39,25 +45,35 @@ jobs:
       with:
         targets: ${{ matrix.target }}
 
+    - name: Install Linux build dependencies
+      if: runner.os == 'Linux' && !matrix.use_cross
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev libx11-dev
+
     - name: Install cross tool
       if: matrix.use_cross
       run: cargo install cross --git https://github.com/cross-rs/cross
 
     - name: Build with Cargo
       if: "!matrix.use_cross"
-      run: cargo build --release --target ${{ matrix.target }}
+      run: cargo build --release --target ${{ matrix.target }} --bins
 
     - name: Build with Cross
       if: matrix.use_cross
-      run: cross build --release --target ${{ matrix.target }}
+      run: cross build --release --target ${{ matrix.target }} --bins
 
-    - name: Rename binary for release
+    - name: Stage binaries for release
       shell: bash
-      run: cp "${{ matrix.bin }}" "${{ matrix.asset_name }}"
+      run: |
+        cp "${{ matrix.bin_gui }}" "${{ matrix.asset_gui }}"
+        cp "${{ matrix.bin_cli }}" "${{ matrix.asset_cli }}"
 
     - name: Upload to Release
       uses: softprops/action-gh-release@v2
       with:
-        files: ${{ matrix.asset_name }}
+        files: |
+          ${{ matrix.asset_gui }}
+          ${{ matrix.asset_cli }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

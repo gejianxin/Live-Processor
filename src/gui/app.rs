@@ -6,6 +6,7 @@ use super::snapshots::SnapshotManager;
 use super::supervisor::SupervisorView;
 #[cfg(windows)]
 use crate::config::is_64bit_os;
+use crate::i18n::{tr, Language};
 
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum ActiveTab {
@@ -118,17 +119,33 @@ impl LiveProcessorApp {
 
             ui.add_space(20.0);
 
-            // Tab Navigation Buttons
-            render_nav_tab(ui, &mut self.active_tab, ActiveTab::Matrix, "🎛️ Wire Matrix");
-            render_nav_tab(ui, &mut self.active_tab, ActiveTab::Rack, "🎚️ Virtual Rack");
-            render_nav_tab(ui, &mut self.active_tab, ActiveTab::Supervisor, "🛡️ Driver Supervisor");
-            render_nav_tab(ui, &mut self.active_tab, ActiveTab::Snapshots, "💾 Show Cues");
+            // Tab Navigation Buttons (Localized)
+            render_nav_tab(ui, &mut self.active_tab, ActiveTab::Matrix, tr("🎛️ 跳线矩阵", "🎛️ Wire Matrix"));
+            render_nav_tab(ui, &mut self.active_tab, ActiveTab::Rack, tr("🎚️ 虚拟机架", "🎚️ Virtual Rack"));
+            render_nav_tab(ui, &mut self.active_tab, ActiveTab::Supervisor, tr("🛡️ 驱动与守护", "🛡️ Driver Supervisor"));
+            render_nav_tab(ui, &mut self.active_tab, ActiveTab::Snapshots, tr("💾 现场快照", "💾 Show Cues"));
 
-            // Right-aligned audio hardware telemetry
+            // Right-aligned audio telemetry & controls
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                // Language Switcher Toggle Button
+                let lang_label = match Language::current() {
+                    Language::Chinese => "🌐 简体中文",
+                    Language::English => "🌐 English",
+                };
+                if ui.button(egui::RichText::new(lang_label).size(11.0).color(Color32::from_rgb(180, 210, 245))).clicked() {
+                    Language::toggle();
+                }
+
+                ui.add_space(8.0);
+
                 // Panic Button
+                let panic_text = if self.panic_muted {
+                    tr("已紧急静音 (PANIC)", "MUTED (PANIC)")
+                } else {
+                    tr("紧急静音", "PANIC")
+                };
                 let panic_btn = egui::Button::new(
-                    egui::RichText::new(if self.panic_muted { "MUTED (PANIC)" } else { "PANIC" })
+                    egui::RichText::new(panic_text)
                         .strong()
                         .color(Color32::WHITE),
                 )
@@ -147,7 +164,7 @@ impl LiveProcessorApp {
                 // Master Volume
                 ui.add(egui::Slider::new(&mut self.master_volume, -40.0..=6.0).show_value(false));
                 ui.label(egui::RichText::new(format!("{:+.1} dB", self.master_volume)).size(11.0).color(Color32::from_rgb(0, 220, 255)));
-                ui.label(egui::RichText::new("Master:").size(11.0).color(Color32::GRAY));
+                ui.label(egui::RichText::new(tr("总输出:", "Master:")).size(11.0).color(Color32::GRAY));
 
                 ui.add_space(14.0);
 
@@ -167,27 +184,27 @@ impl LiveProcessorApp {
     fn render_status_bar(&self, ui: &mut Ui) {
         ui.horizontal(|ui| {
             #[cfg(windows)]
-            let os_text = format!("Platform: Windows x64 ({})", if is_64bit_os() { "64-bit Kernel" } else { "32-bit" });
+            let os_text = format!("{}: Windows x64 ({})", tr("平台", "Platform"), if is_64bit_os() { tr("64位内核", "64-bit Kernel") } else { tr("32位", "32-bit") });
             #[cfg(not(windows))]
-            let os_text = "Platform: Linux Audio Host (PipeWire/JACK/ALSA)".to_string();
+            let os_text = format!("{}: Linux (PipeWire/JACK/ALSA)", tr("平台", "Platform"));
 
             ui.label(egui::RichText::new(os_text).size(11.0).color(Color32::from_rgb(140, 155, 175)));
             ui.separator();
 
             ui.label(
-                egui::RichText::new("ASIO Link Pro 2.4.4.2 [Give Academy Patched]")
+                egui::RichText::new(tr("ASIO Link Pro 2.4.4.2 [Give Academy 终身补丁已集成]", "ASIO Link Pro 2.4.4.2 [Give Academy Patched]"))
                     .size(11.0)
                     .color(Color32::from_rgb(0, 210, 255)),
             );
             ui.separator();
 
             #[cfg(windows)]
-            ui.label(egui::RichText::new("CI Policy UpgradedSystem = 1 [ACTIVE]").size(11.0).color(Color32::from_rgb(0, 230, 140)));
+            ui.label(egui::RichText::new(tr("CI 代码完整性 UpgradedSystem=1 [已受保护]", "CI Policy UpgradedSystem = 1 [ACTIVE]")).size(11.0).color(Color32::from_rgb(0, 230, 140)));
             #[cfg(not(windows))]
-            ui.label(egui::RichText::new("Linux Audio Subsystem: Realtime Ready").size(11.0).color(Color32::from_rgb(0, 230, 140)));
+            ui.label(egui::RichText::new(tr("Linux 实时音频子系统已就绪", "Linux Audio Subsystem: Realtime Ready")).size(11.0).color(Color32::from_rgb(0, 230, 140)));
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.label(egui::RichText::new("v2.4.4-rev1").size(10.0).color(Color32::GRAY));
+                ui.label(egui::RichText::new("v2.4.4-rev1 (GUI)").size(10.0).color(Color32::GRAY));
             });
         });
     }

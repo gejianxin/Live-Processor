@@ -1,8 +1,11 @@
 use egui::{Color32, Pos2, Rect, Stroke, Ui, Vec2};
 
+use crate::i18n::tr;
+
 #[derive(Clone)]
 pub struct ChannelStrip {
-    pub name: String,
+    pub name_zh: &'static str,
+    pub name_en: &'static str,
     pub volume_db: f32,
     pub pan: f32,
     pub mute: bool,
@@ -21,7 +24,8 @@ impl Default for VirtualRack {
         Self {
             channels: vec![
                 ChannelStrip {
-                    name: "MIC / VOCAL".to_string(),
+                    name_zh: "麦克风 / 人声",
+                    name_en: "MIC / VOCAL",
                     volume_db: 0.0,
                     pan: 0.0,
                     mute: false,
@@ -31,7 +35,8 @@ impl Default for VirtualRack {
                     current_peak_r: 0.62,
                 },
                 ChannelStrip {
-                    name: "DAW / SYNTH".to_string(),
+                    name_zh: "宿主 DAW / 合成器",
+                    name_en: "DAW / SYNTH",
                     volume_db: -2.5,
                     pan: 0.0,
                     mute: false,
@@ -41,7 +46,8 @@ impl Default for VirtualRack {
                     current_peak_r: 0.84,
                 },
                 ChannelStrip {
-                    name: "BGM / MEDIA".to_string(),
+                    name_zh: "背景音乐 / 媒体",
+                    name_en: "BGM / MEDIA",
                     volume_db: -6.0,
                     pan: 0.0,
                     mute: false,
@@ -51,7 +57,8 @@ impl Default for VirtualRack {
                     current_peak_r: 0.58,
                 },
                 ChannelStrip {
-                    name: "VOICE / DISCORD".to_string(),
+                    name_zh: "语音通话 / 连麦",
+                    name_en: "VOICE / DISCORD",
                     volume_db: -1.0,
                     pan: 0.0,
                     mute: false,
@@ -61,7 +68,8 @@ impl Default for VirtualRack {
                     current_peak_r: 0.45,
                 },
                 ChannelStrip {
-                    name: "MASTER BUS".to_string(),
+                    name_zh: "主输出总线 MASTER",
+                    name_en: "MASTER BUS",
                     volume_db: 0.0,
                     pan: 0.0,
                     mute: false,
@@ -80,12 +88,12 @@ impl VirtualRack {
         ui.vertical(|ui| {
             ui.horizontal(|ui| {
                 ui.heading(
-                    egui::RichText::new("🎚️ Virtual Rack & Channel Strips")
+                    egui::RichText::new(tr("🎚️ 虚拟效果机架与通道条", "🎚️ Virtual Rack & Channel Strips"))
                         .color(Color32::from_rgb(0, 220, 255))
                         .strong(),
                 );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button("Reset All Faders").clicked() {
+                    if ui.button(tr("重置所有推子", "Reset All Faders")).clicked() {
                         for ch in &mut self.channels {
                             ch.volume_db = 0.0;
                             ch.pan = 0.0;
@@ -98,9 +106,12 @@ impl VirtualRack {
 
             ui.add_space(8.0);
             ui.label(
-                egui::RichText::new("Live mixing console with insert processing slots, high-precision dB faders, and stereo peak meter monitoring.")
-                    .color(Color32::from_rgb(160, 175, 195))
-                    .small(),
+                egui::RichText::new(tr(
+                    "专业调音台通道条，支持插入式效果器、高精度 dB 推子、声像平衡及立体声峰值电平表。",
+                    "Live mixing console with insert processing slots, high-precision dB faders, and stereo peak meter monitoring."
+                ))
+                .color(Color32::from_rgb(160, 175, 195))
+                .small(),
             );
             ui.add_space(10.0);
 
@@ -134,8 +145,9 @@ fn render_channel_strip(ui: &mut Ui, ch: &mut ChannelStrip, idx: usize, time: f6
                 } else {
                     Color32::from_rgb(0, 220, 255)
                 };
+                let display_name = tr(ch.name_zh, ch.name_en);
                 ui.label(
-                    egui::RichText::new(&ch.name)
+                    egui::RichText::new(display_name)
                         .color(header_color)
                         .strong()
                         .size(13.0),
@@ -173,7 +185,7 @@ fn render_channel_strip(ui: &mut Ui, ch: &mut ChannelStrip, idx: usize, time: f6
 
                 // Pan knob / slider
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("Pan").size(10.0).color(Color32::GRAY));
+                    ui.label(egui::RichText::new(tr("声像", "Pan")).size(10.0).color(Color32::GRAY));
                     ui.add(egui::Slider::new(&mut ch.pan, -1.0..=1.0).show_value(false));
                 });
 
@@ -252,7 +264,6 @@ fn render_meter_bar(p: &egui::Painter, x: f32, bottom_y: f32, width: f32, height
     let yellow_h = if filled_h > height * 0.65 { (height * 0.85 - height * 0.65).min(filled_h - height * 0.65) } else { 0.0 };
     let red_h = if filled_h > height * 0.85 { filled_h - height * 0.85 } else { 0.0 };
 
-    // Green zone
     if green_h > 0.0 {
         p.rect_filled(
             Rect::from_min_max(Pos2::new(x, bottom_y - green_h), Pos2::new(x + width, bottom_y)),
@@ -260,7 +271,6 @@ fn render_meter_bar(p: &egui::Painter, x: f32, bottom_y: f32, width: f32, height
             Color32::from_rgb(0, 230, 100),
         );
     }
-    // Yellow zone
     if yellow_h > 0.0 {
         let base_y = bottom_y - height * 0.65;
         p.rect_filled(
@@ -269,7 +279,6 @@ fn render_meter_bar(p: &egui::Painter, x: f32, bottom_y: f32, width: f32, height
             Color32::from_rgb(255, 210, 0),
         );
     }
-    // Red peak zone
     if red_h > 0.0 {
         let base_y = bottom_y - height * 0.85;
         p.rect_filled(

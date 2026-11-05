@@ -3,9 +3,21 @@ name = "live-processor"
 version = "2.4.4-rev1"
 edition = "2024"
 authors = ["gejianxin", "O Deus Audio (Original)", "Give Academy (Patch)", "DirkoAudio (Repack)"]
-description = "Modern cross-platform Rust reimagining of ASIO Link Pro installer, manager and runtime supervisor"
+description = "Modern cross-platform Rust audio processor, driver manager and LiveProfessor-style supervisor"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/gejianxin/Live-Processor"
+
+[lib]
+name = "live_processor"
+path = "src/lib.rs"
+
+[[bin]]
+name = "live-processor-gui"
+path = "src/bin/gui.rs"
+
+[[bin]]
+name = "live-processor-cli"
+path = "src/bin/cli.rs"
 
 [dependencies]
 clap = { version = "4.5", features = ["derive", "cargo"] }
@@ -14,8 +26,8 @@ flate2 = "1.0"
 tar = "0.4"
 colored = "2.2"
 indicatif = "0.17"
-eframe = "0.37.0"
-egui = "0.37.0"
+eframe = "0.37"
+egui = "0.37"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"

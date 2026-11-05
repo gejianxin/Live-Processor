@@ -5,101 +5,101 @@ use crate::config::{DeviceLayout, DEFAULT_START_MENU_GROUP};
 
 #[derive(Parser, Debug)]
 #[command(
-    name = "live-processor",
+    name = "live-processor-cli",
     author = "gejianxin",
     version = "2.4.4-rev1",
-    about = "Modern Rust reimagining of ASIO Link Pro installer, driver manager, and system supervisor"
+    about = "Live-Processor CLI - 专业的 ASIO Link Pro 音频驱动与机架系统管理工具 (默认中文)"
 )]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Option<Commands>,
 
-    /// Run in interactive console CLI wizard mode
-    #[arg(short = 'c', long)]
-    pub cli: bool,
+    /// 使用英文语言界面 / Use English interface
+    #[arg(short = 'e', long)]
+    pub english: bool,
 
-    /// Legacy flag for interactive mode
+    /// 交互式控制台向导模式
     #[arg(short, long)]
     pub interactive: bool,
 }
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
-    /// Install or upgrade Live-Processor / ASIO Link Pro
+    /// 安装或升级 Live-Processor / ASIO Link Pro 音频驱动
     Install(InstallArgs),
 
-    /// Uninstall Live-Processor and clean system
+    /// 卸载 Live-Processor 并清理系统残留
     Uninstall(UninstallArgs),
 
-    /// Display comprehensive diagnostic status of drivers, registry, and tasks
+    /// 查看驱动、服务、注册表与自愈计划任务的诊断报告
     Status,
 
-    /// Apply the Code Integrity policy fix and register autonomous self-heal task
+    /// 应用代码完整性策略并安装自主自愈计划任务
     Fix,
 
-    /// Switch WDM audio device layout between 4x8 and 16x2
+    /// 切换 WDM 音频设备声道布局 (4x8 默认模式 或 16x2 立体声模式)
     SwitchLayout(SwitchLayoutArgs),
 
-    /// Extract embedded installer payload to a local directory
+    /// 提取内置的驱动程序和补丁包到本地目录
     ExtractPayload(ExtractPayloadArgs),
 }
 
 #[derive(Args, Debug)]
 pub struct InstallArgs {
-    /// Custom target installation directory
+    /// 自定义安装目标目录
     #[arg(short, long)]
     pub dir: Option<PathBuf>,
 
-    /// WDM device layout: '4x8' (default) or '16x2' (16 stereo devices)
+    /// WDM 设备声道布局: '4x8' (默认模式) 或 '16x2' (16 个独立立体声设备)
     #[arg(short, long, default_value = "4x8")]
     pub layout: DeviceLayout,
 
-    /// Do not create Start Menu shortcuts
+    /// 不创建开始菜单快捷方式
     #[arg(long)]
     pub no_shortcuts: bool,
 
-    /// Custom Start Menu folder name
+    /// 自定义开始菜单文件夹名称
     #[arg(long, default_value = DEFAULT_START_MENU_GROUP)]
     pub start_menu_group: String,
 
-    /// Custom external payload directory (overrides embedded payload)
+    /// 自定义外部驱动载荷目录 (覆盖内置载荷)
     #[arg(long)]
     pub payload_dir: Option<PathBuf>,
 
-    /// Silent installation without interactive prompts
+    /// 静默无人值守安装
     #[arg(short, long)]
     pub silent: bool,
 }
 
 #[derive(Args, Debug)]
 pub struct UninstallArgs {
-    /// Target directory to uninstall
+    /// 指定卸载目录
     #[arg(short, long)]
     pub dir: Option<PathBuf>,
 
-    /// Delete all user settings, driver data, and startup entries
+    /// 清理所有用户配置、驱动数据与自启动注册表项
     #[arg(short = 'c', long)]
     pub clean: bool,
 
-    /// Silent uninstallation without confirmation prompts
+    /// 静默无人值守卸载
     #[arg(short, long)]
     pub silent: bool,
 }
 
 #[derive(Args, Debug)]
 pub struct SwitchLayoutArgs {
-    /// New WDM device layout: '4x8' or '16x2'
+    /// 目标 WDM 设备声道布局: '4x8' 或 '16x2'
     #[arg(short, long)]
     pub layout: DeviceLayout,
 
-    /// Silent execution
+    /// 静默执行
     #[arg(short, long)]
     pub silent: bool,
 }
 
 #[derive(Args, Debug)]
 pub struct ExtractPayloadArgs {
-    /// Output directory for extracted payload files
+    /// 提取输出目录
     #[arg(short, long, default_value = "./installer_payload")]
     pub out: PathBuf,
 }

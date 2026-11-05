@@ -1,0 +1,16 @@
+pub mod cli;
+pub mod com;
+pub mod config;
+pub mod driver;
+pub mod elevation;
+pub mod gui;
+pub mod i18n;
+pub mod installer;
+pub mod payload;
+pub mod registry;
+pub mod security;
+pub mod shortcuts;
+pub mod status;
+pub mod task;
+pub mod uninstaller;
+pub mod wizard;

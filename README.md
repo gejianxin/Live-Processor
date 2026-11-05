@@ -8,13 +8,32 @@
 
 ---
 
+## 📦 Independent Binaries & Architecture
+
+To achieve clean separation of concerns without inter-process coupling or overhead, **Live-Processor** provides **two independent executables**:
+
+1. **`live-processor-gui`**:
+   - Modern, high-DPI desktop visual audio workspace inspired by commercial live processors (e.g. LiveProfessor).
+   - **Wire Matrix**: Interactive audio routing patchbay grid connecting physical ASIO and virtual WDM channels.
+   - **Virtual Console Rack**: Mixer channel strips with dB faders, stereo peak VU meters, Insert FX slots, and Mute/Solo.
+   - **Supervisor Panel**: Real-time driver status, Code Integrity monitor, and one-click maintenance.
+   - **Show Snapshots**: Cue lists with transition fades and scene automation.
+   - **i18n Switcher**: Built-in one-click language toggle (**简体中文 / English**).
+2. **`live-processor-cli`**:
+   - Standalone command-line and automation tool.
+   - **Default Language**: 简体中文 (Chinese default, use `-e` / `--english` for English).
+   - Complete headless installation, diagnostics, layout switching, and self-heal task registration.
+   - Interactive CLI wizard mode (`-i / --interactive`).
+
+---
+
 ## 🌐 Supported Platforms & Targets
 
-| Platform | Target Architecture | Binary | Primary Role |
+| Platform | Target Architecture | GUI Binary | CLI Binary |
 | :--- | :--- | :--- | :--- |
-| **Windows** | `x86_64-pc-windows-msvc` | `live-processor-windows-x64.exe` | Native Driver Installer, Task Scheduler, DIFxAPI, CI Policy Self-Heal |
-| **Linux (x64)** | `x86_64-unknown-linux-gnu` | `live-processor-linux-x64` | Cross-Platform CLI, Wine/Proton Prefix Manager, PipeWire/JACK Diagnostics, Payload Extractor |
-| **Linux (ARM64)** | `aarch64-unknown-linux-gnu` | `live-processor-linux-arm64` | Cross-Platform CLI, Wine/Box64/FEX Manager, Diagnostics, Payload Extractor |
+| **Windows** | `x86_64-pc-windows-msvc` | `live-processor-gui.exe` | `live-processor-cli.exe` |
+| **Linux (x64)** | `x86_64-unknown-linux-gnu` | `live-processor-gui` | `live-processor-cli` |
+| **Linux (ARM64)** | `aarch64-unknown-linux-gnu` | `live-processor-gui-arm64` | `live-processor-cli-arm64` |
 
 ---
 
