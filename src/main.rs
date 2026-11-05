@@ -3,6 +3,7 @@ mod com;
 mod config;
 mod driver;
 mod elevation;
+mod gui;
 mod installer;
 mod payload;
 mod registry;
@@ -38,8 +39,16 @@ fn main() -> Result<()> {
 
     match cli.command {
         None => {
-            // No subcommand provided: run interactive wizard
-            run_interactive_wizard()?;
+            if cli.cli || cli.interactive {
+                // User explicitly requested console CLI mode
+                run_interactive_wizard()?;
+            } else {
+                // Default: Launch modern commercial-grade Live-Processor GUI!
+                if let Err(e) = gui::run_gui() {
+                    eprintln!("Failed to launch GUI ({}). Falling back to CLI mode...", e);
+                    run_interactive_wizard()?;
+                }
+            }
         }
         Some(Commands::Install(args)) => {
             let options = InstallOptions {

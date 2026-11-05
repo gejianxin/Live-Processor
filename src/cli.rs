@@ -14,7 +14,11 @@ pub struct Cli {
     #[command(subcommand)]
     pub command: Option<Commands>,
 
-    /// Run in interactive console wizard mode
+    /// Run in interactive console CLI wizard mode
+    #[arg(short = 'c', long)]
+    pub cli: bool,
+
+    /// Legacy flag for interactive mode
     #[arg(short, long)]
     pub interactive: bool,
 }

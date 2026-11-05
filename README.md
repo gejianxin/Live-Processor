@@ -30,6 +30,11 @@
 ## ✨ Features
 
 - 🚀 **Zero External Dependencies**: Bundles all 32-bit & 64-bit drivers, patched DLLs, tools, and documentation into a single standalone binary (`live-processor`, ~2.7 MB compressed).
+- 🖥️ **Modern Commercial-Grade Audio GUI (LiveProfessor Inspired)**:
+  - **🎛️ Wire Matrix**: Interactive cross-point patchbay grid for physical ASIO and virtual WDM routing with animated signal nodes.
+  - **🎚️ Virtual Rack**: Mixing console channel strips with insert FX processing slots, dB faders, pan knobs, Mute/Solo, and stereo LED peak meters.
+  - **🛡️ Driver & System Supervisor**: Live monitoring and management for ASIO Link Pro driver status, Code Integrity (`UpgradedSystem=1`), and autonomous self-heal tasks.
+  - **💾 Snapshot & Cue Automation**: Show snapshot manager with smooth crossfade cues and live scene switching.
 - 🎛️ **Dual Device Layout Support**:
   - `4x8`: 4 WDM devices with 8 channels (Original Default)
   - `16x2`: 16 stereo WDM devices (Multi-endpoint routing)
