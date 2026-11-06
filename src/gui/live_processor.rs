@@ -128,53 +128,59 @@ impl LiveProcessorView {
             );
             ui.add_space(12.0);
 
-            // Multi-Destination list
+            // Multi-Destination list (Scrollable with max height to fit all platforms gracefully)
             let mut edit_req = None;
-            for (idx, dest) in self.hub.destinations.iter_mut().enumerate() {
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = 8.0;
-                    ui.checkbox(&mut dest.enabled, "");
+            egui::ScrollArea::vertical()
+                .max_height(210.0)
+                .auto_shrink([false, true])
+                .show(ui, |ui| {
+                    for (idx, dest) in self.hub.destinations.iter_mut().enumerate() {
+                        ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = 8.0;
+                            ui.checkbox(&mut dest.enabled, "");
 
-                    let name_color = if dest.enabled {
-                        Color32::from_rgb(225, 235, 245)
-                    } else {
-                        Color32::from_rgb(120, 135, 150)
-                    };
+                            let name_color = if dest.enabled {
+                                Color32::from_rgb(225, 235, 245)
+                            } else {
+                                Color32::from_rgb(120, 135, 150)
+                            };
 
-                    ui.label(
-                        egui::RichText::new(&dest.name)
-                            .size(13.5)
-                            .color(name_color),
-                    );
+                            ui.label(
+                                egui::RichText::new(&dest.name)
+                                    .size(13.0)
+                                    .color(name_color),
+                            );
 
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let gear = egui::Button::new(
-                            egui::RichText::new("⚙")
-                                .size(13.0)
-                                .color(Color32::from_rgb(140, 155, 175)),
-                        )
-                        .fill(Color32::TRANSPARENT)
-                        .stroke(Stroke::NONE);
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                let gear = egui::Button::new(
+                                    egui::RichText::new("⚙")
+                                        .size(13.0)
+                                        .color(Color32::from_rgb(140, 155, 175)),
+                                )
+                                .fill(Color32::TRANSPARENT)
+                                .stroke(Stroke::NONE);
 
-                        if ui.add(gear).clicked() {
-                            edit_req = Some(idx);
-                        }
+                                if ui.add(gear).clicked() {
+                                    edit_req = Some(idx);
+                                }
 
-                        let proto_text = dest.protocol.as_str();
-                        ui.label(
-                            egui::RichText::new(proto_text)
-                                .size(11.5)
-                                .color(Color32::from_rgb(130, 145, 165)),
-                        );
-                    });
+                                let proto_text = dest.protocol.as_str();
+                                ui.label(
+                                    egui::RichText::new(proto_text)
+                                        .size(11.0)
+                                        .color(Color32::from_rgb(130, 145, 165)),
+                                );
+                            });
+                        });
+                        ui.add_space(6.0);
+                    }
                 });
-                ui.add_space(8.0);
-            }
+
             if let Some(idx) = edit_req {
                 self.editing_destination_idx = Some(idx);
             }
 
-            ui.add_space(40.0);
+            ui.add_space(20.0);
 
             // Bottom Server controls
             // Server Location Dropdown
