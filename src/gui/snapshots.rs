@@ -1,6 +1,6 @@
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use egui::{Color32, Stroke, Ui};
+use egui::{Color32, Rect, Stroke, Ui, Vec2};
 
 use crate::audio::{AudioSharedState, SnapshotTransition};
 use crate::i18n::tr;
@@ -155,8 +155,9 @@ impl SnapshotManager {
             ui.add_space(8.0);
 
             // Responsive Two-Column Layout (Left: Cue Table, Right: Active Scene Inspector)
-            let inspector_w = 300.0;
-            let list_w = (avail_w - inspector_w - 14.0).max(480.0);
+            let inspector_w = 260.0_f32.min(avail_w * 0.35);
+            let gap = 10.0;
+            let list_w = (avail_w - inspector_w - gap).max(360.0);
 
             ui.horizontal(|ui| {
                 // Left Panel: Cue List
@@ -164,9 +165,9 @@ impl SnapshotManager {
                     .fill(Color32::from_rgb(20, 23, 29))
                     .stroke(Stroke::new(1.0, Color32::from_rgb(38, 44, 56)))
                     .corner_radius(egui::CornerRadius::same(6))
-                    .inner_margin(14.0)
+                    .inner_margin(12.0)
                     .show(ui, |ui| {
-                        ui.set_width(list_w);
+                        ui.set_width(list_w - 24.0);
                         ui.set_min_height(avail_h);
 
                         ui.vertical(|ui| {
@@ -200,7 +201,7 @@ impl SnapshotManager {
                                             .fill(card_bg)
                                             .stroke(Stroke::new(1.0, border_color))
                                             .corner_radius(egui::CornerRadius::same(4))
-                                            .inner_margin(10.0)
+                                            .inner_margin(egui::Margin::symmetric(10, 8))
                                             .show(ui, |ui| {
                                                 ui.horizontal(|ui| {
                                                     // Status indicator
@@ -208,25 +209,25 @@ impl SnapshotManager {
                                                     ui.label(egui::RichText::new(bullet).strong().color(Color32::from_rgb(52, 211, 153)));
 
                                                     let title = tr(self.cues[i].title_zh, self.cues[i].title_en);
-                                                    ui.label(egui::RichText::new(title).strong().size(12.0).color(if is_active { Color32::from_rgb(240, 245, 255) } else { Color32::from_rgb(180, 192, 210) }));
+                                                    ui.label(egui::RichText::new(title).strong().size(11.5).color(if is_active { Color32::from_rgb(240, 245, 255) } else { Color32::from_rgb(180, 192, 210) }));
 
                                                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                                        if ui.button(egui::RichText::new(tr("召回", "RECALL")).size(10.5)).clicked() {
+                                                        if ui.button(egui::RichText::new(tr("召回", "RECALL")).size(10.0)).clicked() {
                                                             self.set_active_cue(i);
                                                         }
 
-                                                        ui.add_space(8.0);
+                                                        ui.add_space(6.0);
                                                         let fade_text = format!("{:.1}s", self.cues[i].fade_time_s);
-                                                        ui.label(egui::RichText::new(fade_text).monospace().size(10.5).color(Color32::from_rgb(130, 140, 155)));
+                                                        ui.label(egui::RichText::new(fade_text).monospace().size(10.0).color(Color32::from_rgb(130, 140, 155)));
 
-                                                        ui.add_space(8.0);
-                                                        ui.label(egui::RichText::new(self.cues[i].midi_trigger).size(10.0).color(Color32::from_rgb(110, 120, 135)));
+                                                        ui.add_space(6.0);
+                                                        ui.label(egui::RichText::new(self.cues[i].midi_trigger).size(9.5).color(Color32::from_rgb(110, 120, 135)));
                                                     });
                                                 });
 
                                                 ui.add_space(2.0);
                                                 let desc = tr(self.cues[i].description_zh, self.cues[i].description_en);
-                                                ui.label(egui::RichText::new(desc).size(10.5).color(Color32::from_rgb(130, 140, 155)));
+                                                ui.add(egui::Label::new(egui::RichText::new(desc).size(10.0).color(Color32::from_rgb(130, 140, 155))).wrap());
                                             });
 
                                         ui.add_space(4.0);
@@ -235,23 +236,23 @@ impl SnapshotManager {
                         });
                     });
 
-                ui.add_space(10.0);
+                ui.add_space(gap);
 
                 // Right Panel: Selected Cue Inspector
                 egui::Frame::NONE
                     .fill(Color32::from_rgb(20, 23, 29))
                     .stroke(Stroke::new(1.0, Color32::from_rgb(38, 44, 56)))
                     .corner_radius(egui::CornerRadius::same(6))
-                    .inner_margin(14.0)
+                    .inner_margin(12.0)
                     .show(ui, |ui| {
-                        ui.set_width(inspector_w);
+                        ui.set_width(inspector_w - 24.0);
                         ui.set_min_height(avail_h);
 
                         ui.vertical(|ui| {
-                            ui.label(egui::RichText::new(tr("当前快照属性", "Active Cue Inspector")).strong().size(13.0).color(Color32::from_rgb(225, 232, 242)));
+                            ui.label(egui::RichText::new(tr("当前快照属性", "Active Cue Inspector")).strong().size(12.5).color(Color32::from_rgb(225, 232, 242)));
                             ui.add_space(6.0);
                             ui.separator();
-                            ui.add_space(10.0);
+                            ui.add_space(8.0);
 
                             let cur = &self.cues[self.current_cue_idx];
                             let cur_title = tr(cur.title_zh, cur.title_en);
@@ -262,21 +263,48 @@ impl SnapshotManager {
                             render_field(ui, tr("MIDI 触发", "MIDI Trigger"), cur.midi_trigger);
                             render_field(ui, tr("淡入时间", "Fade Duration"), &format!("{:.1} s", cur.fade_time_s));
 
-                            ui.add_space(10.0);
-                            ui.separator();
                             ui.add_space(8.0);
+                            ui.separator();
+                            ui.add_space(6.0);
 
-                            ui.label(egui::RichText::new(tr("过渡进度", "Transition Curve")).size(11.0).color(Color32::from_rgb(130, 140, 155)));
-                            ui.add_space(4.0);
+                            ui.label(egui::RichText::new(tr("过渡进度", "Transition Curve")).size(10.5).color(Color32::from_rgb(130, 140, 155)));
+                            ui.add_space(3.0);
                             ui.add(egui::ProgressBar::new(self.crossfade_progress).show_percentage());
 
-                            ui.add_space(12.0);
-                            ui.label(egui::RichText::new(tr("场景参数配置:", "Scene Details:")).size(11.0).color(Color32::from_rgb(130, 140, 155)));
-                            ui.add_space(4.0);
-                            ui.label(egui::RichText::new(cur_desc).size(10.5).color(Color32::from_rgb(190, 200, 215)));
+                            ui.add_space(8.0);
+                            ui.label(egui::RichText::new(tr("场景参数配置:", "Scene Details:")).size(10.5).color(Color32::from_rgb(130, 140, 155)));
+                            ui.add_space(2.0);
+                            ui.add(egui::Label::new(egui::RichText::new(cur_desc).size(10.0).color(Color32::from_rgb(190, 200, 215))).wrap());
 
-                            ui.add_space(16.0);
-                            if ui.button(egui::RichText::new(tr("保存为新快照", "Store Snapshot")).size(11.0)).clicked() {
+                            ui.add_space(10.0);
+                            ui.separator();
+                            ui.add_space(6.0);
+
+                            // Channel Target Levels Preview
+                            ui.label(egui::RichText::new(tr("通道推子目标预监", "Channel Target Levels")).size(10.5).color(Color32::from_rgb(130, 140, 155)));
+                            ui.add_space(4.0);
+
+                            let ch_names = ["MIC", "DAW", "BGM", "VOICE", "MASTER"];
+                            for (ch_idx, name) in ch_names.iter().enumerate() {
+                                let target_db = cur.target_faders[ch_idx];
+                                ui.horizontal(|ui| {
+                                    ui.label(egui::RichText::new(*name).size(9.5).monospace().color(Color32::from_rgb(120, 132, 148)));
+                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                        let db_str = if target_db <= -59.0 { "-inf".to_string() } else { format!("{:+.1}dB", target_db) };
+                                        ui.label(egui::RichText::new(db_str).monospace().size(9.5).color(Color32::from_rgb(56, 189, 248)));
+                                    });
+                                });
+                                let norm = ((target_db + 60.0) / 72.0).clamp(0.0, 1.0);
+                                let (bar_rect, _) = ui.allocate_exact_size(Vec2::new(inspector_w - 28.0, 4.0), egui::Sense::hover());
+                                let p = ui.painter();
+                                p.rect_filled(bar_rect, 1.0, Color32::from_rgb(16, 20, 26));
+                                let fill = Rect::from_min_size(bar_rect.min, Vec2::new(bar_rect.width() * norm, bar_rect.height()));
+                                p.rect_filled(fill, 1.0, Color32::from_rgb(56, 189, 248));
+                                ui.add_space(2.0);
+                            }
+
+                            ui.add_space(12.0);
+                            if ui.button(egui::RichText::new(tr("保存为新快照", "Store Snapshot")).size(10.5)).clicked() {
                                 // snapshot stored
                             }
                         });
@@ -310,8 +338,8 @@ impl SnapshotManager {
 
 fn render_field(ui: &mut Ui, key: &str, val: &str) {
     ui.horizontal(|ui| {
-        ui.label(egui::RichText::new(format!("{}:", key)).size(11.0).color(Color32::from_rgb(120, 130, 145)));
-        ui.label(egui::RichText::new(val).size(11.0).color(Color32::from_rgb(210, 220, 235)));
+        ui.label(egui::RichText::new(format!("{}:", key)).size(10.5).color(Color32::from_rgb(120, 130, 145)));
+        ui.add(egui::Label::new(egui::RichText::new(val).size(10.5).color(Color32::from_rgb(210, 220, 235))).wrap());
     });
     ui.add_space(3.0);
 }

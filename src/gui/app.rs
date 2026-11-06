@@ -79,23 +79,18 @@ impl eframe::App for LiveProcessorApp {
         ui.add_space(4.0);
 
         // 2. Central Full-Screen Workspace Area
-        let available_space = (ui.available_height() - 36.0).max(200.0);
+        let available_space = (ui.available_height() - 34.0).max(200.0);
         egui::Frame::NONE
             .fill(Color32::from_rgb(17, 19, 24))
-            .inner_margin(12.0)
+            .inner_margin(egui::Margin::symmetric(12, 8))
             .show(ui, |ui| {
                 ui.set_min_height(available_space);
-
-                egui::ScrollArea::both()
-                    .auto_shrink([false, false])
-                    .show(ui, |ui| {
-                        match self.active_tab {
-                            ActiveTab::Matrix => self.matrix.render(ui, time),
-                            ActiveTab::Rack => self.rack.render(ui, time),
-                            ActiveTab::Supervisor => self.supervisor.render(ui),
-                            ActiveTab::Snapshots => self.snapshots.render(ui),
-                        }
-                    });
+                match self.active_tab {
+                    ActiveTab::Matrix => self.matrix.render(ui, time),
+                    ActiveTab::Rack => self.rack.render(ui, time),
+                    ActiveTab::Supervisor => self.supervisor.render(ui),
+                    ActiveTab::Snapshots => self.snapshots.render(ui),
+                }
             });
 
         ui.add_space(2.0);

@@ -153,26 +153,23 @@ impl VirtualRack {
 
             ui.add_space(8.0);
 
-            // Responsive Horizontal Channel Strips (Expands to fill 100% width)
+            // Responsive Horizontal Channel Strips (Guaranteed 100% visible, no cut-off)
             let channel_count = self.channels.len() as f32;
-            let spacing = 12.0;
+            let spacing = 8.0;
             let total_spacing = spacing * (channel_count - 1.0);
-            let strip_width = ((avail_w - total_spacing) / channel_count).clamp(180.0, 380.0);
+            let strip_outer_w = (avail_w - total_spacing - 4.0) / channel_count;
+            let strip_inner_w = (strip_outer_w - 16.0).max(120.0);
 
             let total_channels = self.channels.len();
             let audio_ref = self.audio_state.clone();
-            egui::ScrollArea::horizontal()
-                .auto_shrink([false, false])
-                .show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        for (idx, ch) in self.channels.iter_mut().enumerate() {
-                            render_channel_strip(ui, ch, idx, strip_width, avail_h, time, audio_ref.as_ref());
-                            if idx + 1 < total_channels {
-                                ui.add_space(spacing);
-                            }
-                        }
-                    });
-                });
+            ui.horizontal(|ui| {
+                for (idx, ch) in self.channels.iter_mut().enumerate() {
+                    render_channel_strip(ui, ch, idx, strip_inner_w, avail_h, time, audio_ref.as_ref());
+                    if idx + 1 < total_channels {
+                        ui.add_space(spacing);
+                    }
+                }
+            });
         });
     }
 }
@@ -192,19 +189,19 @@ fn render_channel_strip(
         .fill(if is_master { Color32::from_rgb(24, 28, 36) } else { Color32::from_rgb(20, 23, 29) })
         .stroke(Stroke::new(1.0, if is_master { Color32::from_rgb(56, 189, 248) } else { Color32::from_rgb(38, 44, 56) }))
         .corner_radius(egui::CornerRadius::same(6))
-        .inner_margin(12.0)
+        .inner_margin(8.0)
         .show(ui, |ui| {
             ui.set_width(width);
-            ui.set_min_height(height);
+            ui.set_min_height(height - 16.0);
 
             ui.vertical_centered(|ui| {
                 // Channel Tag
                 let channel_no = format!("CH {:02}", idx + 1);
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new(channel_no).monospace().size(10.5).color(Color32::from_rgb(120, 132, 148)));
+                    ui.label(egui::RichText::new(channel_no).monospace().size(10.0).color(Color32::from_rgb(120, 132, 148)));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if is_master {
-                            ui.label(egui::RichText::new("MASTER BUS").size(9.5).strong().color(Color32::from_rgb(56, 189, 248)));
+                            ui.label(egui::RichText::new("MASTER").size(9.0).strong().color(Color32::from_rgb(56, 189, 248)));
                         }
                     });
                 });
@@ -214,28 +211,28 @@ fn render_channel_strip(
                 egui::Frame::NONE
                     .fill(if is_master { Color32::from_rgb(28, 38, 52) } else { Color32::from_rgb(26, 30, 38) })
                     .corner_radius(egui::CornerRadius::same(4))
-                    .inner_margin(egui::Margin::symmetric(8, 4))
+                    .inner_margin(egui::Margin::symmetric(4, 3))
                     .show(ui, |ui| {
-                        ui.set_width(width - 16.0);
+                        ui.set_width(width);
                         ui.label(
                             egui::RichText::new(display_name)
                                 .color(if is_master { Color32::from_rgb(56, 189, 248) } else { Color32::from_rgb(225, 232, 242) })
                                 .strong()
-                                .size(12.0),
+                                .size(11.0),
                         );
                     });
 
-                ui.add_space(6.0);
+                ui.add_space(4.0);
 
                 // Insert FX Slots Rack Card
                 egui::Frame::NONE
                     .fill(Color32::from_rgb(16, 18, 23))
                     .stroke(Stroke::new(1.0, Color32::from_rgb(32, 36, 46)))
                     .corner_radius(egui::CornerRadius::same(4))
-                    .inner_margin(8.0)
+                    .inner_margin(6.0)
                     .show(ui, |ui| {
-                        ui.set_width(width - 16.0);
-                        ui.label(egui::RichText::new(tr("效果器插槽 (INSERTS)", "INSERTS")).size(9.0).color(Color32::from_rgb(100, 110, 125)).strong());
+                        ui.set_width(width);
+                        ui.label(egui::RichText::new(tr("效果器插槽 (INSERTS)", "INSERTS")).size(8.5).color(Color32::from_rgb(100, 110, 125)).strong());
                         ui.add_space(2.0);
 
                         for (fx_idx, (fx_name, active)) in ch.fx_slots.iter_mut().enumerate() {
@@ -250,7 +247,7 @@ fn render_channel_strip(
                                         } else {
                                             Color32::from_rgb(60, 68, 80)
                                         };
-                                        if ui.button(egui::RichText::new("●").size(9.0).color(dot_color)).clicked() {
+                                        if ui.button(egui::RichText::new("●").size(8.5).color(dot_color)).clicked() {
                                             *active = !*active;
                                             if let Some(state) = audio_ref {
                                                 if idx < state.channel_fx_active.len() && fx_idx < 4 {
@@ -261,7 +258,7 @@ fn render_channel_strip(
 
                                         ui.label(
                                             egui::RichText::new(*fx_name)
-                                                .size(10.5)
+                                                .size(9.5)
                                                 .color(if *active { Color32::from_rgb(210, 220, 235) } else { Color32::from_rgb(100, 110, 125) }),
                                         );
                                     });
@@ -270,11 +267,11 @@ fn render_channel_strip(
                         }
                     });
 
-                ui.add_space(8.0);
+                ui.add_space(6.0);
 
                 // Pan Slider
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("L").size(9.0).color(Color32::from_rgb(120, 130, 145)));
+                    ui.label(egui::RichText::new("L").size(8.5).color(Color32::from_rgb(120, 130, 145)));
                     if ui.add(egui::Slider::new(&mut ch.pan, -1.0..=1.0).show_value(false)).changed() {
                         if let Some(state) = audio_ref {
                             if idx < state.channel_pans.len() {
@@ -282,24 +279,25 @@ fn render_channel_strip(
                             }
                         }
                     }
-                    ui.label(egui::RichText::new("R").size(9.0).color(Color32::from_rgb(120, 130, 145)));
+                    ui.label(egui::RichText::new("R").size(8.5).color(Color32::from_rgb(120, 130, 145)));
                 });
 
-                ui.add_space(6.0);
+                ui.add_space(4.0);
 
                 // Mute & Solo Buttons
+                let btn_w = ((width - 4.0) / 2.0).max(34.0);
                 ui.horizontal(|ui| {
                     let m_btn = egui::Button::new(
                         egui::RichText::new("MUTE")
                             .strong()
-                            .size(10.0)
+                            .size(9.5)
                             .color(if ch.mute { Color32::WHITE } else { Color32::from_rgb(160, 170, 185) }),
                     )
                     .fill(if ch.mute { Color32::from_rgb(220, 38, 38) } else { Color32::from_rgb(28, 32, 40) })
                     .stroke(Stroke::new(1.0, Color32::from_rgb(46, 54, 66)))
                     .corner_radius(egui::CornerRadius::same(3));
 
-                    if ui.add_sized([((width - 44.0) / 2.0).max(40.0), 22.0], m_btn).clicked() {
+                    if ui.add_sized([btn_w, 20.0], m_btn).clicked() {
                         ch.mute = !ch.mute;
                         if let Some(state) = audio_ref {
                             if idx < state.channel_mutes.len() {
@@ -311,14 +309,14 @@ fn render_channel_strip(
                     let s_btn = egui::Button::new(
                         egui::RichText::new("SOLO")
                             .strong()
-                            .size(10.0)
+                            .size(9.5)
                             .color(if ch.solo { Color32::BLACK } else { Color32::from_rgb(160, 170, 185) }),
                     )
                     .fill(if ch.solo { Color32::from_rgb(245, 158, 11) } else { Color32::from_rgb(28, 32, 40) })
                     .stroke(Stroke::new(1.0, Color32::from_rgb(46, 54, 66)))
                     .corner_radius(egui::CornerRadius::same(3));
 
-                    if ui.add_sized([((width - 44.0) / 2.0).max(40.0), 22.0], s_btn).clicked() {
+                    if ui.add_sized([btn_w, 20.0], s_btn).clicked() {
                         ch.solo = !ch.solo;
                         if let Some(state) = audio_ref {
                             if idx < state.channel_solos.len() {
@@ -328,14 +326,15 @@ fn render_channel_strip(
                     }
                 });
 
-                ui.add_space(8.0);
+                ui.add_space(6.0);
 
                 // Main Fader & Stereo Peak VU Meters
-                let fader_height = (height - 320.0).clamp(160.0, 340.0);
+                let fader_height = (height - 310.0).clamp(140.0, 320.0);
+                let fader_w = ((width - 24.0) * 0.6).clamp(26.0, 38.0);
                 ui.horizontal(|ui| {
                     // Vertical dB Fader
                     if ui.add_sized(
-                        [38.0, fader_height],
+                        [fader_w, fader_height],
                         egui::Slider::new(&mut ch.volume_db, -60.0..=12.0)
                             .vertical()
                             .show_value(false),
@@ -347,10 +346,10 @@ fn render_channel_strip(
                         }
                     }
 
-                    ui.add_space(8.0);
+                    ui.add_space(4.0);
 
                     // Dual Stereo VU Meters
-                    let (vu_rect, _) = ui.allocate_exact_size(Vec2::new(20.0, fader_height), egui::Sense::hover());
+                    let (vu_rect, _) = ui.allocate_exact_size(Vec2::new(16.0, fader_height), egui::Sense::hover());
 
                     let (meter_l, meter_r) = if let Some(state) = audio_ref {
                         if is_master {
@@ -387,7 +386,7 @@ fn render_channel_strip(
                     render_stereo_meter(ui, vu_rect, meter_l, meter_r);
                 });
 
-                ui.add_space(6.0);
+                ui.add_space(4.0);
 
                 // Numerical dB readout badge
                 let val_text = if ch.volume_db <= -59.0 {
@@ -400,9 +399,12 @@ fn render_channel_strip(
                     .fill(Color32::from_rgb(16, 18, 23))
                     .stroke(Stroke::new(1.0, Color32::from_rgb(34, 40, 52)))
                     .corner_radius(egui::CornerRadius::same(3))
-                    .inner_margin(egui::Margin::symmetric(8, 3))
+                    .inner_margin(egui::Margin::symmetric(4, 2))
                     .show(ui, |ui| {
-                        ui.label(egui::RichText::new(val_text).monospace().size(11.0).color(Color32::from_rgb(56, 189, 248)));
+                        ui.set_width(width);
+                        ui.vertical_centered(|ui| {
+                            ui.label(egui::RichText::new(val_text).monospace().size(10.0).color(Color32::from_rgb(56, 189, 248)));
+                        });
                     });
             });
         });

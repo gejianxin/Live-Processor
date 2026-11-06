@@ -193,111 +193,125 @@ impl SupervisorView {
                 .inner_margin(12.0)
                 .corner_radius(egui::CornerRadius::same(4))
                 .show(ui, |ui| {
-                    ui.horizontal_wrapped(|ui| {
-                        ui.label(egui::RichText::new(tr("声道布局切换:", "Target Layout:")).color(Color32::from_rgb(160, 172, 188)));
-                        egui::ComboBox::from_id_salt("layout_selector")
-                            .selected_text(self.selected_layout.description())
-                            .show_ui(ui, |ui| {
-                                ui.selectable_value(&mut self.selected_layout, DeviceLayout::Layout4x8, DeviceLayout::Layout4x8.description());
-                                ui.selectable_value(&mut self.selected_layout, DeviceLayout::Layout16x2, DeviceLayout::Layout16x2.description());
-                            });
+                    ui.set_width(avail_w - 24.0);
 
-                        ui.add_space(12.0);
+                    ui.vertical(|ui| {
+                        // Line 1: Layout Selection & Maintenance Utility
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new(tr("声道布局切换:", "Target Layout:")).color(Color32::from_rgb(160, 172, 188)));
+                            egui::ComboBox::from_id_salt("layout_selector")
+                                .selected_text(self.selected_layout.description())
+                                .show_ui(ui, |ui| {
+                                    ui.selectable_value(&mut self.selected_layout, DeviceLayout::Layout4x8, DeviceLayout::Layout4x8.description());
+                                    ui.selectable_value(&mut self.selected_layout, DeviceLayout::Layout16x2, DeviceLayout::Layout16x2.description());
+                                });
 
-                        // Launch ASIO Link Tool Button
-                        if ui.button(egui::RichText::new(tr("启动 ASIO Link Tool", "Launch ASIO Tool")).color(Color32::from_rgb(52, 211, 153)).strong()).clicked() {
-                            if self.bridge.launch_tool() {
-                                self.log(tr("[成功] 已启动 ASIO Link Tool 伴侣程序", "[SUCCESS] Launched ASIO Link Tool"));
+                            ui.add_space(8.0);
+                            if ui.button(tr("切换设备布局", "Switch Layout")).clicked() {
+                                self.log(&format!("{} {}...", tr("正在切换设备声道布局为", "Switching layout to"), self.selected_layout.description()));
+                                let opts = InstallOptions {
+                                    install_dir: None,
+                                    layout: self.selected_layout,
+                                    create_shortcuts: true,
+                                    start_menu_group: DEFAULT_START_MENU_GROUP.to_string(),
+                                    custom_payload_path: None,
+                                    silent: true,
+                                };
+                                match run_install(opts) {
+                                    Ok(_) => {
+                                        self.log(tr("[成功] 声道布局已成功切换！", "[SUCCESS] Layout switched successfully!"));
+                                        self.refresh_audit();
+                                    }
+                                    Err(e) => self.log(&format!("{}: {}", tr("[错误] 声道布局切换失败", "[ERROR] Layout switch failed"), e)),
+                                }
+                            }
+
+                            ui.add_space(8.0);
+                            if ui.button(tr("解包提取驱动", "Extract Payload")).clicked() {
+                                let out_dir = std::path::PathBuf::from("./extracted_payload");
+                                if let Ok(source) = PayloadSource::new(None) {
+                                    let _ = source.extract_all_to(&out_dir);
+                                    self.log(&format!("{}: {}", tr("[成功] 驱动资源已解包至", "[SUCCESS] Extracted payload to"), out_dir.display()));
+                                }
+                            }
+                        });
+
+                        ui.add_space(8.0);
+
+                        // Line 2: Core Lifecycle Actions
+                        ui.horizontal(|ui| {
+                            // Launch ASIO Link Tool Button
+                            if ui.button(egui::RichText::new(tr("启动 ASIO Link Tool", "Launch ASIO Tool")).color(Color32::from_rgb(52, 211, 153)).strong()).clicked() {
+                                if self.bridge.launch_tool() {
+                                    self.log(tr("[成功] 已启动 ASIO Link Tool 伴侣程序", "[SUCCESS] Launched ASIO Link Tool"));
+                                    self.refresh_audit();
+                                } else {
+                                    self.log(tr("[提示] 未检测到已安装的 asiolinktool.exe，请先点击'安装 / 升级驱动'", "[INFO] asiolinktool.exe not found. Please install driver first."));
+                                }
+                            }
+
+                            ui.add_space(6.0);
+
+                            // Quick Fix Button
+                            if ui.button(egui::RichText::new(tr("应用代码完整性自愈修复", "Apply Self-Heal Fix")).color(Color32::from_rgb(56, 189, 248)).strong()).clicked() {
+                                self.log(tr("正在重新应用 CI 代码完整性注册表策略与自主自愈计划任务...", "Applying Code Integrity policy and scheduled task..."));
+                                let _ = apply_code_integrity_policy_fix();
+                                #[cfg(windows)]
+                                let _ = install_registry_fix_task();
+                                let dat_file = crate::config::get_system_drivers_dir().join("asiovadpro.dat");
+                                let _ = grant_users_full_access_file(&dat_file);
+                                let _ = grant_users_full_access_registry();
+                                self.log(tr("[成功] 快速修复已执行完毕，系统已受保护。", "[SUCCESS] Quick repair completed successfully."));
                                 self.refresh_audit();
-                            } else {
-                                self.log(tr("[提示] 未检测到已安装的 asiolinktool.exe，请先点击'安装 / 升级驱动'", "[INFO] asiolinktool.exe not found. Please install driver first."));
                             }
-                        }
 
-                        // Install Button
-                        if ui.button(egui::RichText::new(tr("安装 / 升级驱动", "Install / Upgrade")).strong()).clicked() {
-                            self.log(tr("正在执行驱动部署流程...", "Executing driver deployment..."));
-                            let opts = InstallOptions {
-                                install_dir: None,
-                                layout: self.selected_layout,
-                                create_shortcuts: true,
-                                start_menu_group: DEFAULT_START_MENU_GROUP.to_string(),
-                                custom_payload_path: None,
-                                silent: true,
-                            };
-                            match run_install(opts) {
-                                Ok(_) => {
-                                    self.log(tr("[成功] 驱动程序及运行时组件安装成功！", "[SUCCESS] Driver installed successfully!"));
-                                    self.refresh_audit();
+                            ui.add_space(6.0);
+
+                            // Install Button
+                            if ui.button(egui::RichText::new(tr("安装 / 升级驱动", "Install / Upgrade")).strong()).clicked() {
+                                self.log(tr("正在执行驱动部署流程...", "Executing driver deployment..."));
+                                let opts = InstallOptions {
+                                    install_dir: None,
+                                    layout: self.selected_layout,
+                                    create_shortcuts: true,
+                                    start_menu_group: DEFAULT_START_MENU_GROUP.to_string(),
+                                    custom_payload_path: None,
+                                    silent: true,
+                                };
+                                match run_install(opts) {
+                                    Ok(_) => {
+                                        self.log(tr("[成功] 驱动程序及运行时组件安装成功！", "[SUCCESS] Driver installed successfully!"));
+                                        self.refresh_audit();
+                                    }
+                                    Err(e) => self.log(&format!("{}: {}", tr("[错误] 安装失败", "[ERROR] Install failed"), e)),
                                 }
-                                Err(e) => self.log(&format!("{}: {}", tr("[错误] 安装失败", "[ERROR] Install failed"), e)),
                             }
-                        }
 
-                        // Quick Fix Button
-                        if ui.button(egui::RichText::new(tr("应用代码完整性自愈修复", "Apply Self-Heal Fix")).color(Color32::from_rgb(56, 189, 248)).strong()).clicked() {
-                            self.log(tr("正在重新应用 CI 代码完整性注册表策略与自主自愈计划任务...", "Applying Code Integrity policy and scheduled task..."));
-                            let _ = apply_code_integrity_policy_fix();
-                            #[cfg(windows)]
-                            let _ = install_registry_fix_task();
-                            let dat_file = crate::config::get_system_drivers_dir().join("asiovadpro.dat");
-                            let _ = grant_users_full_access_file(&dat_file);
-                            let _ = grant_users_full_access_registry();
-                            self.log(tr("[成功] 快速修复已执行完毕，系统已受保护。", "[SUCCESS] Quick repair completed successfully."));
-                            self.refresh_audit();
-                        }
+                            ui.add_space(6.0);
 
-                        // Layout Switch Button
-                        if ui.button(tr("切换设备布局", "Switch Layout")).clicked() {
-                            self.log(&format!("{} {}...", tr("正在切换设备声道布局为", "Switching layout to"), self.selected_layout.description()));
-                            let opts = InstallOptions {
-                                install_dir: None,
-                                layout: self.selected_layout,
-                                create_shortcuts: true,
-                                start_menu_group: DEFAULT_START_MENU_GROUP.to_string(),
-                                custom_payload_path: None,
-                                silent: true,
-                            };
-                            match run_install(opts) {
-                                Ok(_) => {
-                                    self.log(tr("[成功] 声道布局已成功切换！", "[SUCCESS] Layout switched successfully!"));
-                                    self.refresh_audit();
+                            // Uninstall Button
+                            if ui.button(egui::RichText::new(tr("卸载驱动与清理", "Uninstall Driver")).color(Color32::from_rgb(248, 113, 113))).clicked() {
+                                self.log(tr("正在执行驱动卸载流程...", "Executing uninstallation..."));
+                                let opts = UninstallOptions {
+                                    app_dir: None,
+                                    delete_all_settings: true,
+                                    silent: true,
+                                };
+                                match run_uninstall(opts) {
+                                    Ok(_) => {
+                                        self.log(tr("[成功] 卸载与清理完成。", "[SUCCESS] Uninstallation completed."));
+                                        self.refresh_audit();
+                                    }
+                                    Err(e) => self.log(&format!("{}: {}", tr("[错误] 卸载失败", "[ERROR] Uninstall failed"), e)),
                                 }
-                                Err(e) => self.log(&format!("{}: {}", tr("[错误] 声道布局切换失败", "[ERROR] Layout switch failed"), e)),
                             }
-                        }
-
-                        // Extract Payload Button
-                        if ui.button(tr("解包提取驱动", "Extract Payload")).clicked() {
-                            let out_dir = std::path::PathBuf::from("./extracted_payload");
-                            if let Ok(source) = PayloadSource::new(None) {
-                                let _ = source.extract_all_to(&out_dir);
-                                self.log(&format!("{}: {}", tr("[成功] 驱动资源已解包至", "[SUCCESS] Extracted payload to"), out_dir.display()));
-                            }
-                        }
-
-                        // Uninstall Button
-                        if ui.button(egui::RichText::new(tr("卸载驱动与清理", "Uninstall Driver")).color(Color32::from_rgb(248, 113, 113))).clicked() {
-                            self.log(tr("正在执行驱动卸载流程...", "Executing uninstallation..."));
-                            let opts = UninstallOptions {
-                                app_dir: None,
-                                delete_all_settings: true,
-                                silent: true,
-                            };
-                            match run_uninstall(opts) {
-                                Ok(_) => {
-                                    self.log(tr("[成功] 卸载与清理完成。", "[SUCCESS] Uninstallation completed."));
-                                    self.refresh_audit();
-                                }
-                                Err(e) => self.log(&format!("{}: {}", tr("[错误] 卸载失败", "[ERROR] Uninstall failed"), e)),
-                            }
-                        }
+                        });
                     });
                 });
 
-            ui.add_space(14.0);
+            ui.add_space(10.0);
 
-            // 3. Diagnostics & Activity Log Box (Responsive Full Height & Width)
+            // 3. Diagnostics & Activity Log Box (Fills entire bottom height)
             ui.horizontal(|ui| {
                 ui.label(egui::RichText::new(tr("活动审计与驱动诊断日志", "Activity & Diagnostic Logs")).strong().size(12.0).color(Color32::from_rgb(200, 210, 225)));
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -309,7 +323,7 @@ impl SupervisorView {
 
             ui.add_space(4.0);
 
-            let remaining_h = (ui.available_height() - 8.0).max(140.0);
+            let remaining_h = (ui.available_height() - 10.0).max(180.0);
 
             egui::Frame::NONE
                 .fill(Color32::from_rgb(14, 16, 20))
@@ -317,25 +331,51 @@ impl SupervisorView {
                 .corner_radius(egui::CornerRadius::same(4))
                 .inner_margin(10.0)
                 .show(ui, |ui| {
-                    egui::ScrollArea::vertical()
-                        .min_scrolled_height(remaining_h)
-                        .auto_shrink([false, false])
-                        .stick_to_bottom(true)
-                        .show(ui, |ui| {
-                            ui.set_width(ui.available_width());
-                            for line in &self.logs {
-                                let color = if line.contains("[SUCCESS]") || line.contains("[成功]") {
-                                    Color32::from_rgb(52, 211, 153) // Subtle emerald
-                                } else if line.contains("[ERROR]") || line.contains("[错误]") {
-                                    Color32::from_rgb(248, 113, 113) // Soft coral red
-                                } else if line.contains("[AUDIT]") {
-                                    Color32::from_rgb(56, 189, 248) // Clean sky blue
-                                } else {
-                                    Color32::from_rgb(156, 168, 184)
-                                };
-                                ui.label(egui::RichText::new(line).color(color).monospace().size(11.0));
-                            }
+                    ui.set_width(avail_w - 20.0);
+                    ui.set_min_height(remaining_h);
+
+                    ui.vertical(|ui| {
+                        // Diagnostic status chips
+                        ui.horizontal(|ui| {
+                            let chip = |ui: &mut Ui, label: &str, ok: bool| {
+                                egui::Frame::NONE
+                                    .fill(if ok { Color32::from_rgb(18, 32, 28) } else { Color32::from_rgb(34, 22, 24) })
+                                    .stroke(Stroke::new(1.0, if ok { Color32::from_rgb(46, 120, 80) } else { Color32::from_rgb(120, 46, 50) }))
+                                    .corner_radius(egui::CornerRadius::same(3))
+                                    .inner_margin(egui::Margin::symmetric(6, 2))
+                                    .show(ui, |ui| {
+                                        ui.label(egui::RichText::new(label).monospace().size(9.5).color(if ok { Color32::from_rgb(52, 211, 153) } else { Color32::from_rgb(248, 113, 113) }));
+                                    });
+                            };
+                            chip(ui, if self.audit.is_installed { "DRIVER: INSTALLED" } else { "DRIVER: NOT_FOUND" }, self.audit.is_installed);
+                            chip(ui, if self.bridge.is_tool_running { "ASIO TOOL: RUNNING" } else { "ASIO TOOL: STOPPED" }, self.bridge.is_tool_running);
+                            chip(ui, if self.audit.ci_policy_applied { "CI POLICY: ACTIVE (1)" } else { "CI POLICY: INACTIVE (0)" }, self.audit.ci_policy_applied);
+                            chip(ui, if self.audit.task_verified { "SELF-HEAL TASK: REGISTERED" } else { "SELF-HEAL TASK: MISSING" }, self.audit.task_verified);
                         });
+
+                        ui.add_space(6.0);
+                        ui.separator();
+                        ui.add_space(4.0);
+
+                        egui::ScrollArea::vertical()
+                            .auto_shrink([false, false])
+                            .stick_to_bottom(true)
+                            .show(ui, |ui| {
+                                ui.set_width(avail_w - 40.0);
+                                for line in &self.logs {
+                                    let color = if line.contains("[SUCCESS]") || line.contains("[成功]") {
+                                        Color32::from_rgb(52, 211, 153) // Subtle emerald
+                                    } else if line.contains("[ERROR]") || line.contains("[错误]") {
+                                        Color32::from_rgb(248, 113, 113) // Soft coral red
+                                    } else if line.contains("[AUDIT]") {
+                                        Color32::from_rgb(56, 189, 248) // Clean sky blue
+                                    } else {
+                                        Color32::from_rgb(156, 168, 184)
+                                    };
+                                    ui.label(egui::RichText::new(line).color(color).monospace().size(10.5));
+                                }
+                            });
+                    });
                 });
         });
     }

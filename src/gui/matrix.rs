@@ -134,10 +134,10 @@ impl RoutingMatrix {
 
             // Responsive Two-Column Layout:
             // Left Panel: Visual Patchbay Matrix Grid (Flexible, shrinks/grows gracefully)
-            // Right Panel: Route Inspector & Preset Control Rack (Fixed 240px width)
-            let inspector_w = 240.0;
-            let gap_between_panels = 12.0;
-            let matrix_w = (total_avail_w - inspector_w - gap_between_panels).max(520.0);
+            // Right Panel: Route Inspector & Preset Control Rack (Fixed 230px width)
+            let inspector_w = 230.0;
+            let gap_between_panels = 10.0;
+            let matrix_w = (total_avail_w - inspector_w - gap_between_panels).max(480.0);
 
             ui.horizontal(|ui| {
                 // ==========================================
@@ -147,20 +147,20 @@ impl RoutingMatrix {
                     .fill(Color32::from_rgb(20, 23, 29))
                     .stroke(Stroke::new(1.0, Color32::from_rgb(38, 44, 56)))
                     .corner_radius(egui::CornerRadius::same(6))
-                    .inner_margin(12.0)
+                    .inner_margin(10.0)
                     .show(ui, |ui| {
-                        ui.set_width(matrix_w);
+                        ui.set_width(matrix_w - 20.0);
 
                         ui.vertical(|ui| {
                             // Column geometry:
                             // Fixed label column width guarantees ZERO misalignment across rows
-                            let label_col_w = 180.0;
+                            let label_col_w = 160.0;
                             let col_count = destinations.len() as f32;
-                            let col_gap = 5.0;
+                            let col_gap = 4.0;
                             let total_gaps = col_gap * col_count;
-                            let cell_w = ((matrix_w - label_col_w - 24.0 - total_gaps) / col_count).clamp(50.0, 110.0);
-                            let cell_h = 36.0;
-                            let header_h = 48.0;
+                            let cell_w = ((matrix_w - label_col_w - 24.0 - total_gaps) / col_count).max(46.0);
+                            let cell_h = 40.0;
+                            let header_h = 44.0;
 
                             // ------------------------------------
                             // Header Row: Output Destination Cards
@@ -175,7 +175,7 @@ impl RoutingMatrix {
                                     corner_rect.center(),
                                     Align2::CENTER_CENTER,
                                     tr("输入来源 ↓  \\  输出目标 →", "Inputs ↓  \\  Outputs →"),
-                                    FontId::proportional(11.0),
+                                    FontId::proportional(10.5),
                                     Color32::from_rgb(150, 162, 178),
                                 );
 
@@ -190,19 +190,19 @@ impl RoutingMatrix {
 
                                     // Line 1: Port Tag (Top, Cyan, bold)
                                     p.text(
-                                        Pos2::new(hdr_rect.center().x, hdr_rect.min.y + 14.0),
+                                        Pos2::new(hdr_rect.center().x, hdr_rect.min.y + 13.0),
                                         Align2::CENTER_CENTER,
                                         *tag,
-                                        FontId::proportional(10.5),
+                                        FontId::proportional(10.0),
                                         Color32::from_rgb(56, 189, 248),
                                     );
 
                                     // Line 2: Port Name (Bottom, White/Silver, bold)
                                     p.text(
-                                        Pos2::new(hdr_rect.center().x, hdr_rect.min.y + 33.0),
+                                        Pos2::new(hdr_rect.center().x, hdr_rect.min.y + 30.0),
                                         Align2::CENTER_CENTER,
                                         *name,
-                                        FontId::proportional(11.0),
+                                        FontId::proportional(10.5),
                                         Color32::from_rgb(225, 235, 246),
                                     );
 
@@ -210,7 +210,7 @@ impl RoutingMatrix {
                                 }
                             });
 
-                            ui.add_space(6.0);
+                            ui.add_space(5.0);
 
                             // ------------------------------------
                             // Data Rows: Audio Sources & Sockets
@@ -237,7 +237,7 @@ impl RoutingMatrix {
 
                                     // 5-Segment LED Signal Bar on left
                                     let meter_rect = Rect::from_min_size(
-                                        Pos2::new(src_rect.min.x + 8.0, src_rect.min.y + 5.0),
+                                        Pos2::new(src_rect.min.x + 8.0, src_rect.min.y + 7.0),
                                         Vec2::new(6.0, 26.0),
                                     );
                                     render_segment_meter(p, meter_rect, level);
@@ -245,10 +245,10 @@ impl RoutingMatrix {
                                     // Text: Tag + Name
                                     let full_title = format!("{} {}", tag, name);
                                     p.text(
-                                        Pos2::new(src_rect.min.x + 20.0, src_rect.center().y),
+                                        Pos2::new(src_rect.min.x + 18.0, src_rect.center().y),
                                         Align2::LEFT_CENTER,
                                         full_title,
-                                        FontId::proportional(11.0),
+                                        FontId::proportional(10.5),
                                         Color32::from_rgb(220, 228, 238),
                                     );
 
@@ -329,7 +329,7 @@ impl RoutingMatrix {
                                 ui.add_space(4.0);
                             }
 
-                            ui.add_space(10.0);
+                            ui.add_space(8.0);
 
                             // Bottom Legend & Help Bar
                             ui.horizontal(|ui| {
@@ -359,12 +359,12 @@ impl RoutingMatrix {
                     .fill(Color32::from_rgb(20, 23, 29))
                     .stroke(Stroke::new(1.0, Color32::from_rgb(38, 44, 56)))
                     .corner_radius(egui::CornerRadius::same(6))
-                    .inner_margin(12.0)
+                    .inner_margin(10.0)
                     .show(ui, |ui| {
-                        ui.set_width(inspector_w);
+                        ui.set_width(inspector_w - 20.0);
 
                         ui.vertical(|ui| {
-                            ui.label(egui::RichText::new(tr("🎛️ 路由状态与控制台", "Routing Inspector & Controls")).strong().size(12.5).color(Color32::from_rgb(235, 240, 248)));
+                            ui.label(egui::RichText::new(tr("🎛️ 路由状态与控制台", "Routing Inspector & Controls")).strong().size(12.0).color(Color32::from_rgb(235, 240, 248)));
                             ui.add_space(6.0);
                             ui.separator();
                             ui.add_space(8.0);
@@ -383,23 +383,24 @@ impl RoutingMatrix {
                                 .stroke(Stroke::new(1.0, Color32::from_rgb(42, 50, 64)))
                                 .inner_margin(8.0)
                                 .show(ui, |ui| {
+                                    ui.set_width(inspector_w - 36.0);
                                     ui.horizontal(|ui| {
-                                        ui.label(egui::RichText::new(format!("{}", active_nodes)).strong().size(22.0).color(Color32::from_rgb(56, 189, 248)));
+                                        ui.label(egui::RichText::new(format!("{}", active_nodes)).strong().size(20.0).color(Color32::from_rgb(56, 189, 248)));
                                         ui.vertical(|ui| {
-                                            ui.label(egui::RichText::new(tr("活跃跳线通路", "Active Connections")).strong().size(11.0).color(Color32::from_rgb(220, 228, 238)));
-                                            ui.label(egui::RichText::new(format!("{} / 36 {}", tr("共", "Total"), tr("最大矩阵节点", "matrix nodes"))).size(10.0).color(Color32::from_rgb(110, 120, 135)));
+                                            ui.label(egui::RichText::new(tr("活跃跳线通路", "Active Connections")).strong().size(10.5).color(Color32::from_rgb(220, 228, 238)));
+                                            ui.label(egui::RichText::new(format!("{} / 36 {}", tr("共", "Total"), tr("最大矩阵节点", "matrix nodes"))).size(9.5).color(Color32::from_rgb(110, 120, 135)));
                                         });
                                     });
                                 });
 
-                            ui.add_space(10.0);
+                            ui.add_space(8.0);
                             render_info_row(ui, tr("矩阵吞吐", "Throughput"), tr("零延迟 (0.0 ms)", "Zero Latency"));
                             render_info_row(ui, tr("路由引擎", "Router Engine"), tr("已激活", "Online"));
                             render_info_row(ui, tr("通道保护", "Isolation"), tr("全独立立体声", "Discrete Stereo"));
 
-                            ui.add_space(12.0);
-                            ui.label(egui::RichText::new(tr("一键跳线场景预设", "One-Click Presets")).strong().size(11.0).color(Color32::from_rgb(180, 192, 210)));
-                            ui.add_space(6.0);
+                            ui.add_space(10.0);
+                            ui.label(egui::RichText::new(tr("一键跳线场景预设", "One-Click Presets")).strong().size(10.5).color(Color32::from_rgb(180, 192, 210)));
+                            ui.add_space(4.0);
 
                             // Preset Buttons
                             render_preset_card(
@@ -408,7 +409,7 @@ impl RoutingMatrix {
                                 tr("人声+DAW 混音送往 OBS 与监听", "Mix Mic & DAW to OBS & Monitors"),
                                 || self.apply_broadcast_preset(),
                             );
-                            ui.add_space(4.0);
+                            ui.add_space(3.0);
 
                             render_preset_card(
                                 ui,
@@ -416,7 +417,7 @@ impl RoutingMatrix {
                                 tr("人声与乐器直接送至监听与宿主", "Direct Mic & Inst to Headphones"),
                                 || self.apply_studio_preset(),
                             );
-                            ui.add_space(4.0);
+                            ui.add_space(3.0);
 
                             render_preset_card(
                                 ui,
@@ -425,22 +426,102 @@ impl RoutingMatrix {
                                 || self.apply_gaming_preset(),
                             );
 
-                            ui.add_space(12.0);
+                            ui.add_space(10.0);
                             ui.separator();
-                            ui.add_space(8.0);
+                            ui.add_space(6.0);
 
                             if ui.checkbox(&mut self.direct_monitoring, tr("启用硬件零延迟监听", "Direct ASIO Monitoring")).changed() {
                                 self.sync_to_audio_engine();
                             }
                             ui.add_space(2.0);
-                            ui.label(
-                                egui::RichText::new(tr("绕开 Windows 混音器，声卡原生超低延迟直通。", "Bypass OS mixer for true zero-latency monitoring."))
-                                    .size(9.5)
-                                    .color(Color32::from_rgb(110, 120, 135)),
+                            ui.add(
+                                egui::Label::new(
+                                    egui::RichText::new(tr("绕开 Windows 混音器，声卡原生超低延迟直通。", "Bypass OS mixer for true zero-latency monitoring."))
+                                        .size(9.0)
+                                        .color(Color32::from_rgb(110, 120, 135)),
+                                )
+                                .wrap(),
                             );
                         });
                     });
             });
+
+            ui.add_space(10.0);
+
+            // ==========================================
+            // 3. BOTTOM PANEL: REAL-TIME BUS & I/O METER BRIDGE
+            // ==========================================
+            egui::Frame::NONE
+                .fill(Color32::from_rgb(20, 23, 29))
+                .stroke(Stroke::new(1.0, Color32::from_rgb(38, 44, 56)))
+                .corner_radius(egui::CornerRadius::same(6))
+                .inner_margin(10.0)
+                .show(ui, |ui| {
+                    ui.set_width(total_avail_w - 20.0);
+
+                    ui.vertical(|ui| {
+                        // Title row
+                        ui.horizontal(|ui| {
+                            ui.label(
+                                egui::RichText::new(tr("📊 物理与虚拟总线实时信号监视 (Bus & Stream Level Monitor)", "Real-Time Bus & Stream Level Monitor"))
+                                    .strong()
+                                    .size(11.5)
+                                    .color(Color32::from_rgb(225, 235, 246)),
+                            );
+                            ui.label(
+                                egui::RichText::new(tr("- 6路输入源与6路输出总线实时 Peak / RMS 动态电平监测", "- 6 Inputs & 6 Output Buses Real-time dBFS Levels"))
+                                    .size(10.0)
+                                    .color(Color32::from_rgb(120, 130, 145)),
+                            );
+                        });
+
+                        ui.add_space(6.0);
+                        ui.separator();
+                        ui.add_space(6.0);
+
+                        let card_spacing = 6.0;
+                        let total_meter_cols = 6.0;
+                        let meter_card_w = ((total_avail_w - 44.0 - card_spacing * 5.0) / total_meter_cols).max(75.0);
+
+                        // Row 1: 6 Inputs
+                        ui.horizontal(|ui| {
+                            for (s_idx, (tag, name)) in sources.iter().enumerate() {
+                                let peak = if let Some(state) = &self.audio_state {
+                                    f32::from_bits(state.input_peaks[s_idx].load(Ordering::Relaxed))
+                                } else {
+                                    (0.4 + (time * 2.5 + (s_idx as f64) * 0.9).sin() as f32 * 0.15).clamp(0.02, 0.95)
+                                };
+                                render_bus_meter_card(ui, meter_card_w, tag, name, peak, true);
+                                if s_idx < 5 {
+                                    ui.add_space(card_spacing);
+                                }
+                            }
+                        });
+
+                        ui.add_space(6.0);
+
+                        // Row 2: 6 Outputs
+                        ui.horizontal(|ui| {
+                            for (d_idx, (tag, name)) in destinations.iter().enumerate() {
+                                let mut out_peak: f32 = 0.0;
+                                if let Some(state) = &self.audio_state {
+                                    for s in 0..6 {
+                                        if self.connections[s][d_idx] {
+                                            let p = f32::from_bits(state.input_peaks[s].load(Ordering::Relaxed));
+                                            out_peak = (out_peak + p * 0.7).min(1.0);
+                                        }
+                                    }
+                                } else {
+                                    out_peak = (0.5 + (time * 3.0 + (d_idx as f64) * 0.8).sin() as f32 * 0.18).clamp(0.02, 0.95);
+                                }
+                                render_bus_meter_card(ui, meter_card_w, tag, name, out_peak, false);
+                                if d_idx < 5 {
+                                    ui.add_space(card_spacing);
+                                }
+                            }
+                        });
+                    });
+                });
         });
     }
 
@@ -546,4 +627,49 @@ fn render_info_row(ui: &mut Ui, key: &str, val: &str) {
         ui.label(egui::RichText::new(val).size(10.5).color(Color32::from_rgb(210, 220, 235)));
     });
     ui.add_space(2.0);
+}
+
+fn render_bus_meter_card(ui: &mut Ui, width: f32, tag: &str, name: &str, level: f32, is_input: bool) {
+    egui::Frame::NONE
+        .fill(Color32::from_rgb(23, 28, 36))
+        .stroke(Stroke::new(1.0, Color32::from_rgb(38, 46, 58)))
+        .corner_radius(egui::CornerRadius::same(4))
+        .inner_margin(egui::Margin::symmetric(6, 4))
+        .show(ui, |ui| {
+            ui.set_width(width);
+            ui.vertical(|ui| {
+                ui.horizontal(|ui| {
+                    ui.label(
+                        egui::RichText::new(tag)
+                            .strong()
+                            .size(9.5)
+                            .color(if is_input { Color32::from_rgb(56, 189, 248) } else { Color32::from_rgb(52, 211, 153) }),
+                    );
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let db_text = if level < 0.05 {
+                            "-inf".to_string()
+                        } else {
+                            format!("{:.1}dB", 20.0 * level.log10())
+                        };
+                        ui.label(egui::RichText::new(db_text).monospace().size(8.5).color(Color32::from_rgb(130, 142, 158)));
+                    });
+                });
+                ui.label(egui::RichText::new(name).size(9.5).color(Color32::from_rgb(210, 220, 235)));
+
+                // Horizontal meter bar
+                let (meter_rect, _) = ui.allocate_exact_size(Vec2::new(width - 4.0, 5.0), egui::Sense::hover());
+                let p = ui.painter();
+                p.rect_filled(meter_rect, 1.0, Color32::from_rgb(12, 14, 18));
+                let active_w = (meter_rect.width() * level.clamp(0.0, 1.0)).max(0.0);
+                let fill_rect = Rect::from_min_size(meter_rect.min, Vec2::new(active_w, meter_rect.height()));
+                let col = if level > 0.88 {
+                    Color32::from_rgb(248, 113, 113)
+                } else if level > 0.65 {
+                    Color32::from_rgb(245, 158, 11)
+                } else {
+                    Color32::from_rgb(52, 211, 153)
+                };
+                p.rect_filled(fill_rect, 1.0, col);
+            });
+        });
 }
