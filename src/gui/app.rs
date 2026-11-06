@@ -199,20 +199,30 @@ impl LiveProcessorApp {
 
                 ui.add_space(8.0);
 
-                // Latency & DSP Load Badge
+                // Latency & DSP Load Badge (Responsive to available header width)
                 let sr = self.audio_engine.state.telemetry.sample_rate.load(Ordering::Relaxed);
                 let buf = self.audio_engine.state.telemetry.buffer_size.load(Ordering::Relaxed);
                 let lat = self.audio_engine.state.telemetry.get_latency_ms();
                 let dsp = self.audio_engine.state.telemetry.get_dsp_load();
                 let is_hw = self.audio_engine.state.telemetry.is_hardware_active.load(Ordering::Relaxed);
-                let hw_label = if is_hw { "WASAPI/ASIO" } else { "DSP Engine" };
-                let badge_text = format!("{} | {} Hz | {} smp (~{:.1} ms) | DSP: {:.0}%", hw_label, sr, buf, lat, dsp);
-                ui.label(
-                    egui::RichText::new(badge_text)
-                        .size(10.0)
-                        .color(Color32::from_rgb(52, 211, 153))
-                        .monospace(),
-                );
+                let hw_label = if is_hw { "WASAPI/ASIO" } else { "DSP" };
+
+                let avail_for_badge = ui.available_width();
+                if avail_for_badge > 50.0 {
+                    let badge_text = if avail_for_badge > 260.0 {
+                        format!("{} | {} Hz | {} smp (~{:.1} ms) | DSP: {:.0}%", hw_label, sr, buf, lat, dsp)
+                    } else if avail_for_badge > 150.0 {
+                        format!("{} | {:.1} ms | DSP: {:.0}%", hw_label, lat, dsp)
+                    } else {
+                        format!("{:.1} ms | {:.0}%", lat, dsp)
+                    };
+                    ui.label(
+                        egui::RichText::new(badge_text)
+                            .size(10.0)
+                            .color(Color32::from_rgb(52, 211, 153))
+                            .monospace(),
+                    );
+                }
             });
         });
     }
