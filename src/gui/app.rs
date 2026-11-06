@@ -1,6 +1,7 @@
 use std::sync::atomic::Ordering;
 use egui::{Color32, Stroke, Ui};
 
+use super::live_processor::LiveProcessorView;
 use super::matrix::RoutingMatrix;
 use super::rack::VirtualRack;
 use super::snapshots::SnapshotManager;
@@ -12,6 +13,7 @@ use crate::i18n::{tr, Language};
 
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum ActiveTab {
+    LiveProcessor,
     Matrix,
     Rack,
     Supervisor,
@@ -20,6 +22,7 @@ pub enum ActiveTab {
 
 pub struct LiveProcessorApp {
     pub active_tab: ActiveTab,
+    pub live_processor: LiveProcessorView,
     pub matrix: RoutingMatrix,
     pub rack: VirtualRack,
     pub supervisor: SupervisorView,
@@ -39,7 +42,8 @@ impl LiveProcessorApp {
         let state = audio_engine.state.clone();
 
         Self {
-            active_tab: ActiveTab::Matrix,
+            active_tab: ActiveTab::LiveProcessor,
+            live_processor: LiveProcessorView::new(),
             matrix: RoutingMatrix::new(state.clone()),
             rack: VirtualRack::new(state.clone()),
             supervisor: SupervisorView::default(),
@@ -69,23 +73,24 @@ impl eframe::App for LiveProcessorApp {
 
         // 1. Top Control Header
         egui::Frame::NONE
-            .fill(Color32::from_rgb(20, 23, 29))
-            .stroke(Stroke::new(1.0, Color32::from_rgb(36, 42, 54)))
+            .fill(Color32::from_rgb(14, 21, 30))
+            .stroke(Stroke::new(1.0, Color32::from_rgb(30, 42, 60)))
             .inner_margin(egui::Margin::symmetric(14, 10))
             .show(ui, |ui| {
                 self.render_header(ui, time);
             });
 
-        ui.add_space(4.0);
+        ui.add_space(2.0);
 
         // 2. Central Full-Screen Workspace Area
         let available_space = (ui.available_height() - 34.0).max(200.0);
         egui::Frame::NONE
-            .fill(Color32::from_rgb(17, 19, 24))
-            .inner_margin(egui::Margin::symmetric(12, 8))
+            .fill(Color32::from_rgb(14, 21, 30))
+            .inner_margin(egui::Margin::symmetric(10, 6))
             .show(ui, |ui| {
                 ui.set_min_height(available_space);
                 match self.active_tab {
+                    ActiveTab::LiveProcessor => self.live_processor.render(ui, time),
                     ActiveTab::Matrix => self.matrix.render(ui, time),
                     ActiveTab::Rack => self.rack.render(ui, time),
                     ActiveTab::Supervisor => self.supervisor.render(ui),
@@ -97,8 +102,8 @@ impl eframe::App for LiveProcessorApp {
 
         // 3. Bottom Status Bar
         egui::Frame::NONE
-            .fill(Color32::from_rgb(15, 17, 21))
-            .stroke(Stroke::new(1.0, Color32::from_rgb(30, 35, 46)))
+            .fill(Color32::from_rgb(11, 17, 24))
+            .stroke(Stroke::new(1.0, Color32::from_rgb(26, 36, 50)))
             .inner_margin(egui::Margin::symmetric(14, 6))
             .show(ui, |ui| {
                 self.render_status_bar(ui);
@@ -144,6 +149,7 @@ impl LiveProcessorApp {
             ui.add_space(14.0);
 
             // Tab Navigation Switcher (Studio console style)
+            render_nav_tab(ui, &mut self.active_tab, ActiveTab::LiveProcessor, tr("推流主控", "Live Stream"));
             render_nav_tab(ui, &mut self.active_tab, ActiveTab::Matrix, tr("跳线矩阵", "Wire Matrix"));
             render_nav_tab(ui, &mut self.active_tab, ActiveTab::Rack, tr("虚拟机架", "Virtual Rack"));
             render_nav_tab(ui, &mut self.active_tab, ActiveTab::Supervisor, tr("驱动与守护", "Supervisor"));
@@ -238,20 +244,27 @@ impl LiveProcessorApp {
             ui.separator();
 
             ui.label(
-                egui::RichText::new(tr("ASIO Link Pro 2.4.4.2 [Give Academy 终身补丁已集成]", "ASIO Link Pro 2.4.4.2 [Give Academy Patched]"))
+                egui::RichText::new(tr("Dialog Audio 集中推流引擎 [CDN / RTMP 多路就绪]", "Dialog Audio Stream Engine [CDN / RTMP Ready]"))
+                    .size(10.5)
+                    .color(Color32::from_rgb(56, 189, 248)),
+            );
+            ui.separator();
+
+            ui.label(
+                egui::RichText::new(tr("ASIO Link Pro [低延迟驱动就绪]", "ASIO Link Pro [Driver Ready]"))
                     .size(10.5)
                     .color(Color32::from_rgb(175, 188, 205)),
             );
             ui.separator();
 
             #[cfg(windows)]
-            ui.label(egui::RichText::new(tr("CI 代码完整性策略: UpgradedSystem=1 [安全守护中]", "CI Policy UpgradedSystem = 1 [PROTECTED]")).size(10.5).color(Color32::from_rgb(52, 211, 153)));
+            ui.label(egui::RichText::new(tr("CI 安全守护: 激活", "CI Guard: Active")).size(10.5).color(Color32::from_rgb(52, 211, 153)));
             #[cfg(not(windows))]
-            ui.label(egui::RichText::new(tr("Linux 实时音频子系统已就绪", "Linux Audio Subsystem Ready")).size(10.5).color(Color32::from_rgb(52, 211, 153)));
+            ui.label(egui::RichText::new(tr("Linux 实时音频已就绪", "Linux Audio Ready")).size(10.5).color(Color32::from_rgb(52, 211, 153)));
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.add_space(6.0);
-                ui.label(egui::RichText::new("Live-Processor Pro v2.4.4").size(10.0).color(Color32::from_rgb(100, 110, 125)));
+                ui.label(egui::RichText::new("Dialog Audio Live-Processor v2.4.4").size(10.0).color(Color32::from_rgb(110, 125, 145)));
             });
         });
     }
@@ -262,27 +275,27 @@ fn render_nav_tab(ui: &mut Ui, current: &mut ActiveTab, tab: ActiveTab, label: &
     let text = egui::RichText::new(label)
         .size(11.5)
         .color(if is_selected {
-            Color32::from_rgb(240, 245, 252)
+            Color32::from_rgb(240, 248, 255)
         } else {
-            Color32::from_rgb(140, 152, 168)
+            Color32::from_rgb(140, 155, 175)
         })
         .strong();
 
     let btn = egui::Button::new(text)
         .fill(if is_selected {
-            Color32::from_rgb(32, 40, 54)
+            Color32::from_rgb(24, 38, 56)
         } else {
-            Color32::from_rgb(22, 26, 33)
+            Color32::from_rgb(18, 24, 34)
         })
         .stroke(Stroke::new(
             1.0,
             if is_selected {
                 Color32::from_rgb(56, 189, 248)
             } else {
-                Color32::from_rgb(36, 42, 54)
+                Color32::from_rgb(34, 46, 62)
             },
         ))
-        .corner_radius(egui::CornerRadius::same(4));
+        .corner_radius(egui::CornerRadius::same(5));
 
     if ui.add(btn).clicked() {
         *current = tab;

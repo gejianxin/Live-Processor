@@ -79,3 +79,44 @@ fn test_snapshot_transition_interpolation() {
     assert!(transition.get_progress() >= 0.0);
     assert!(transition.get_progress() <= 1.0);
 }
+
+#[test]
+fn test_live_stream_hub_multi_destination_broadcast() {
+    use live_processor::audio::{
+        LiveStreamHub, ServerConnectionState, ServerRegion,
+    };
+
+    let mut hub = LiveStreamHub::new();
+
+    // Verify initial multi-destinations
+    assert!(hub.destinations.len() >= 5);
+    assert!(hub.active_destination_count() >= 3);
+
+    // Verify Server Region and Latency
+    assert_eq!(hub.server_region, ServerRegion::EuropeParis);
+    assert_eq!(hub.server_region.latency_ms(), 18);
+
+    // Verify Timer formatting
+    hub.elapsed_seconds = 309; // 5 min 9 sec
+    assert_eq!(hub.formatted_timer(), "00:05:09");
+
+    // Test toggle broadcast
+    assert!(hub.is_broadcasting);
+    hub.toggle_broadcast();
+    assert!(!hub.is_broadcasting);
+    hub.toggle_broadcast();
+    assert!(hub.is_broadcasting);
+
+    // Test Mic mute
+    assert!(!hub.mic_muted);
+    hub.toggle_mic_mute();
+    assert!(hub.mic_muted);
+    hub.update_frame(1.0);
+    assert_eq!(hub.input_meter_l, 0.0);
+    assert_eq!(hub.input_meter_r, 0.0);
+
+    // Test Server connection toggle
+    assert_eq!(hub.server_state, ServerConnectionState::Online);
+    hub.toggle_server_connection();
+    assert_eq!(hub.server_state, ServerConnectionState::Offline);
+}

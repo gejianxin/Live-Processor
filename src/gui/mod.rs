@@ -1,4 +1,5 @@
 pub mod app;
+pub mod live_processor;
 pub mod matrix;
 pub mod rack;
 pub mod snapshots;
@@ -9,9 +10,9 @@ use anyhow::Result;
 pub fn run_gui() -> Result<()> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([1120.0, 700.0])
-            .with_min_inner_size([960.0, 560.0])
-            .with_title("Live-Processor Pro"),
+            .with_inner_size([1160.0, 720.0])
+            .with_min_inner_size([980.0, 580.0])
+            .with_title("Dialog Audio Live-Processor Pro"),
         ..Default::default()
     };
 
@@ -70,13 +71,13 @@ fn setup_custom_fonts(ctx: &egui::Context) {
 fn configure_audio_theme(ctx: &egui::Context) {
     let mut visuals = egui::Visuals::dark();
 
-    // Minimalist Studio Palette
-    let bg_canvas = egui::Color32::from_rgb(18, 20, 24);
-    let bg_surface = egui::Color32::from_rgb(25, 29, 35);
-    let bg_widget = egui::Color32::from_rgb(32, 37, 46);
-    let border_subtle = egui::Color32::from_rgb(44, 52, 64);
-    let text_primary = egui::Color32::from_rgb(230, 236, 244);
-    let accent_teal = egui::Color32::from_rgb(56, 189, 248);
+    // Authentic Dialog Audio Studio Broadcast Palette
+    let bg_canvas = egui::Color32::from_rgb(14, 21, 30);      // #0E151E Deep Navy Broadcast
+    let bg_surface = egui::Color32::from_rgb(20, 28, 40);     // #141C28 Studio Surface
+    let bg_widget = egui::Color32::from_rgb(26, 36, 50);      // #1A2432 Control Plate
+    let border_subtle = egui::Color32::from_rgb(38, 52, 72);  // #263448 Precise Divider
+    let text_primary = egui::Color32::from_rgb(240, 246, 252);
+    let accent_cyan = egui::Color32::from_rgb(56, 189, 248);   // #38BDF8 Glowing Cyan
 
     visuals.override_text_color = Some(text_primary);
     visuals.panel_fill = bg_canvas;
@@ -84,21 +85,21 @@ fn configure_audio_theme(ctx: &egui::Context) {
 
     visuals.widgets.noninteractive.bg_fill = bg_surface;
     visuals.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, border_subtle);
-    visuals.widgets.noninteractive.corner_radius = egui::CornerRadius::same(4);
+    visuals.widgets.noninteractive.corner_radius = egui::CornerRadius::same(5);
 
     visuals.widgets.inactive.bg_fill = bg_widget;
     visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, border_subtle);
-    visuals.widgets.inactive.corner_radius = egui::CornerRadius::same(4);
+    visuals.widgets.inactive.corner_radius = egui::CornerRadius::same(5);
 
-    visuals.widgets.hovered.bg_fill = egui::Color32::from_rgb(40, 48, 60);
-    visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0, accent_teal);
-    visuals.widgets.hovered.corner_radius = egui::CornerRadius::same(4);
+    visuals.widgets.hovered.bg_fill = egui::Color32::from_rgb(32, 46, 64);
+    visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0, accent_cyan);
+    visuals.widgets.hovered.corner_radius = egui::CornerRadius::same(5);
 
-    visuals.widgets.active.bg_fill = egui::Color32::from_rgb(28, 54, 78);
-    visuals.widgets.active.bg_stroke = egui::Stroke::new(1.0, accent_teal);
-    visuals.widgets.active.corner_radius = egui::CornerRadius::same(4);
+    visuals.widgets.active.bg_fill = egui::Color32::from_rgb(24, 48, 72);
+    visuals.widgets.active.bg_stroke = egui::Stroke::new(1.0, accent_cyan);
+    visuals.widgets.active.corner_radius = egui::CornerRadius::same(5);
 
-    visuals.widgets.open.bg_fill = egui::Color32::from_rgb(34, 40, 50);
+    visuals.widgets.open.bg_fill = egui::Color32::from_rgb(28, 40, 56);
     visuals.widgets.open.bg_stroke = egui::Stroke::new(1.0, border_subtle);
 
     ctx.set_visuals(visuals);
