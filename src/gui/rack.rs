@@ -250,16 +250,12 @@ fn render_channel_strip(
     let is_master = idx == 4;
     let mut clicked = false;
 
-    // Distinct card frame styling: high contrast borders for unselected channels so racks are clearly separated!
+    // Distinct card frame styling: high contrast steel borders for unselected channels so racks are clearly separated.
+    // Strictly ONLY the currently selected channel receives the vibrant Sky Blue border (#38BDF8)!
     let (bg_color, border_stroke) = if is_selected {
         (
             Color32::from_rgb(26, 34, 48),
-            Stroke::new(2.0, Color32::from_rgb(56, 189, 248)), // Vibrant Sky Blue for selected
-        )
-    } else if is_master {
-        (
-            Color32::from_rgb(24, 28, 38),
-            Stroke::new(1.5, Color32::from_rgb(14, 165, 233)), // Sky blue master accent
+            Stroke::new(2.0, Color32::from_rgb(56, 189, 248)), // Vibrant Sky Blue for selected ONLY
         )
     } else {
         (
@@ -290,8 +286,6 @@ fn render_channel_strip(
                             .size(10.0)
                             .color(if is_selected {
                                 Color32::from_rgb(56, 189, 248)
-                            } else if is_master {
-                                Color32::from_rgb(14, 165, 233)
                             } else {
                                 Color32::from_rgb(170, 185, 205)
                             }),
@@ -299,9 +293,14 @@ fn render_channel_strip(
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if is_selected {
-                            ui.label(egui::RichText::new(tr("● 选中", "● EDIT")).size(8.5).strong().color(Color32::from_rgb(56, 189, 248)));
+                            let badge_text = if is_master {
+                                tr("● 选中 (MASTER)", "● EDIT (MASTER)")
+                            } else {
+                                tr("● 选中", "● EDIT")
+                            };
+                            ui.label(egui::RichText::new(badge_text).size(8.5).strong().color(Color32::from_rgb(56, 189, 248)));
                         } else if is_master {
-                            ui.label(egui::RichText::new("MASTER").size(8.5).strong().color(Color32::from_rgb(14, 165, 233)));
+                            ui.label(egui::RichText::new("MASTER").size(8.5).strong().color(Color32::from_rgb(130, 145, 165)));
                         } else {
                             ui.label(egui::RichText::new(tr("就绪", "READY")).size(8.0).color(Color32::from_rgb(100, 115, 135)));
                         }
@@ -319,8 +318,6 @@ fn render_channel_strip(
                 egui::Frame::NONE
                     .fill(if is_selected {
                         Color32::from_rgb(32, 44, 62)
-                    } else if is_master {
-                        Color32::from_rgb(28, 38, 52)
                     } else {
                         Color32::from_rgb(28, 33, 44)
                     })
@@ -332,7 +329,7 @@ fn render_channel_strip(
                         ui.vertical_centered(|ui| {
                             ui.label(
                                 egui::RichText::new(display_name)
-                                    .color(if is_selected || is_master { Color32::from_rgb(56, 189, 248) } else { Color32::from_rgb(230, 238, 248) })
+                                    .color(if is_selected { Color32::from_rgb(56, 189, 248) } else { Color32::from_rgb(230, 238, 248) })
                                     .strong()
                                     .size(9.5),
                             );
@@ -551,7 +548,7 @@ fn render_channel_strip(
                                     .monospace()
                                     .strong()
                                     .size(9.5)
-                                    .color(if is_selected { Color32::from_rgb(56, 189, 248) } else { Color32::from_rgb(100, 200, 255) }),
+                                    .color(if is_selected { Color32::from_rgb(56, 189, 248) } else { Color32::from_rgb(156, 185, 214) }),
                             );
                         });
                     });
