@@ -35,7 +35,12 @@ impl Default for VirtualRack {
                     pan: 0.0,
                     mute: false,
                     solo: false,
-                    fx_slots: vec![("HPF 80Hz", true), ("Opto Comp", true), ("De-Esser", false), ("Studio Verb", true)],
+                    fx_slots: vec![
+                        ("HPF 80Hz", true),
+                        ("Opto Comp", true),
+                        ("De-Esser", false),
+                        ("Studio Verb", true),
+                    ],
                     current_peak_l: 0.65,
                     current_peak_r: 0.62,
                 },
@@ -46,7 +51,12 @@ impl Default for VirtualRack {
                     pan: 0.0,
                     mute: false,
                     solo: false,
-                    fx_slots: vec![("Pro-Q 3", true), ("Sidechain", true), ("Stereo Imager", false), ("Tape Sat", true)],
+                    fx_slots: vec![
+                        ("Pro-Q 3", true),
+                        ("Sidechain", true),
+                        ("Stereo Imager", false),
+                        ("Tape Sat", true),
+                    ],
                     current_peak_l: 0.80,
                     current_peak_r: 0.82,
                 },
@@ -57,7 +67,12 @@ impl Default for VirtualRack {
                     pan: 0.0,
                     mute: false,
                     solo: false,
-                    fx_slots: vec![("Ducking", true), ("Warm EQ", false), ("Peak Limiter", true)],
+                    fx_slots: vec![
+                        ("Ducking", true),
+                        ("Warm EQ", false),
+                        ("Stereo Widener", false),
+                        ("Peak Limiter", true),
+                    ],
                     current_peak_l: 0.52,
                     current_peak_r: 0.55,
                 },
@@ -68,7 +83,12 @@ impl Default for VirtualRack {
                     pan: 0.0,
                     mute: false,
                     solo: false,
-                    fx_slots: vec![("Noise Gate", true), ("Vocal Leveller", true), ("Output EQ", false)],
+                    fx_slots: vec![
+                        ("Noise Gate", true),
+                        ("Vocal Leveller", true),
+                        ("Air EQ", false),
+                        ("Output Limiter", true),
+                    ],
                     current_peak_l: 0.45,
                     current_peak_r: 0.42,
                 },
@@ -79,7 +99,12 @@ impl Default for VirtualRack {
                     pan: 0.0,
                     mute: false,
                     solo: false,
-                    fx_slots: vec![("Bus Glue", true), ("True Peak Limiter", true), ("Loudness LUFS", true)],
+                    fx_slots: vec![
+                        ("Bus Glue", true),
+                        ("Master Tape Sat", false),
+                        ("True Peak Limiter", true),
+                        ("Loudness LUFS", true),
+                    ],
                     current_peak_l: 0.85,
                     current_peak_r: 0.86,
                 },
@@ -156,23 +181,28 @@ impl VirtualRack {
             ui.add_space(4.0);
 
             // Responsive geometry calculation: 100% fitting in both windowed and maximized modes
-            let card_h = (avail_h - 36.0).max(320.0);
+            // Height budget: cards fill vertical space, minus header and bottom safety margin
+            let card_h = (avail_h - 40.0).clamp(320.0, 900.0);
             let channel_count = self.channels.len() as f32;
-            let spacing = 6.0;
+            let spacing = 6.0_f32;
             let total_spacing = spacing * (channel_count - 1.0);
-            let effective_avail_w = (avail_w - 10.0).max(480.0);
+
+            // Reserve generous 16.0px right cushion so CH 05 NEVER clips and horizontal scrollbar never triggers
+            let effective_avail_w = (avail_w - 16.0).max(460.0);
             let strip_outer_w = ((effective_avail_w - total_spacing) / channel_count).floor();
-            // Card has 6px left and 6px right margin = 12px
-            let strip_inner_w = (strip_outer_w - 12.0).max(90.0);
+            // Total horizontal margin & border per card: 6px left + 6px right + 2*stroke(2) = 16px
+            let strip_inner_w = (strip_outer_w - 16.0).max(80.0);
 
             let audio_ref = self.audio_state.clone();
             let mut newly_selected = self.selected_channel;
 
             egui::ScrollArea::horizontal()
                 .auto_shrink([false, false])
+                .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded)
                 .show(ui, |ui| {
-                    ui.spacing_mut().item_spacing.x = spacing;
-                    ui.horizontal(|ui| {
+                    // Strictly align ALL cards to the TOP with Align::Min to eliminate any stair-stepping!
+                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
+                        ui.spacing_mut().item_spacing.x = spacing;
                         for (idx, ch) in self.channels.iter_mut().enumerate() {
                             let is_selected = idx == self.selected_channel;
                             let clicked = render_channel_strip(
@@ -228,6 +258,13 @@ fn render_channel_strip(
         )
     };
 
+    // Every channel has EXACTLY 4 FX slots.
+    // Fixed non-fader height budget is strictly measured:
+    // Header(22) + Gap(3) + Name(22) + Gap(3) + FX(89) + Gap(3) + Pan(18) + Gap(3) + Mute/Solo(20) + Gap(4) + dB(18) + Pad(12) = 217px
+    let non_fader_h = 218.0;
+    let fader_height = (card_h - non_fader_h).clamp(65.0, 420.0);
+    let exact_card_inner_h = non_fader_h + fader_height;
+
     let frame_resp = egui::Frame::NONE
         .fill(bg_color)
         .stroke(border_stroke)
@@ -236,8 +273,7 @@ fn render_channel_strip(
         .show(ui, |ui| {
             ui.set_width(width);
             ui.set_max_width(width);
-            ui.set_min_height(card_h - 12.0);
-            ui.set_max_height(card_h - 12.0);
+            ui.set_height(exact_card_inner_h);
 
             ui.vertical_centered(|ui| {
                 // 1. Channel Header Plate (Clickable to select this channel)
@@ -294,20 +330,18 @@ fn render_channel_strip(
                             egui::RichText::new(display_name)
                                 .color(if is_selected || is_master { Color32::from_rgb(56, 189, 248) } else { Color32::from_rgb(230, 238, 248) })
                                 .strong()
-                                .size(10.5),
+                                .size(10.0),
                         );
                     });
 
                 ui.add_space(3.0);
 
-                // 3. Insert FX Slots Rack Card (Responsive height)
-                let is_compact_height = card_h < 430.0;
-                let slot_padding = if is_compact_height { 1 } else { 2 };
+                // 3. Insert FX Slots Rack Card (Uniform 4 slots for all channels)
                 egui::Frame::NONE
                     .fill(Color32::from_rgb(16, 20, 27))
                     .stroke(Stroke::new(1.0, Color32::from_rgb(42, 50, 65)))
                     .corner_radius(egui::CornerRadius::same(4))
-                    .inner_margin(egui::Margin::symmetric(4, if is_compact_height { 3 } else { 4 }))
+                    .inner_margin(egui::Margin::symmetric(4, 3))
                     .show(ui, |ui| {
                         ui.set_width(width);
                         ui.label(egui::RichText::new(tr("效果器插槽 (INSERTS)", "INSERTS")).size(8.5).color(Color32::from_rgb(120, 135, 155)).strong());
@@ -318,7 +352,7 @@ fn render_channel_strip(
                                 .fill(if *active { Color32::from_rgb(24, 32, 44) } else { Color32::from_rgb(18, 21, 28) })
                                 .stroke(Stroke::new(0.5, if *active { Color32::from_rgb(56, 100, 140) } else { Color32::from_rgb(32, 38, 48) }))
                                 .corner_radius(egui::CornerRadius::same(3))
-                                .inner_margin(egui::Margin::symmetric(3, slot_padding))
+                                .inner_margin(egui::Margin::symmetric(3, 1))
                                 .show(ui, |ui| {
                                     ui.horizontal(|ui| {
                                         ui.spacing_mut().item_spacing.x = 4.0;
@@ -419,10 +453,6 @@ fn render_channel_strip(
                 ui.add_space(4.0);
 
                 // 6. Dynamic Main Fader + dB Scale Ticks + Dual Stereo Peak VU Meters
-                // Non-fader height is dynamically accounted for to guarantee 100% vertical fit on any window
-                let non_fader_h = if is_compact_height { 210.0 } else { 235.0 };
-                let fader_height = (card_h - non_fader_h).clamp(70.0, 360.0);
-
                 // Pro Console Assembly: [Fader Track] [dB Markings] [Dual Stereo VU Meter]
                 // Centered horizontally within the channel card!
                 let fader_w = (width * 0.30).clamp(28.0, 48.0);
