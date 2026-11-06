@@ -181,30 +181,37 @@ impl VirtualRack {
             ui.add_space(4.0);
 
             // Responsive geometry calculation: 100% direct fit with clean side margins, ZERO scrollbar
-            let side_margin = 8.0_f32;
             let spacing = 8.0_f32;
             let channel_count = self.channels.len() as f32; // 5.0
-            let total_spacing = spacing * (channel_count - 1.0); // 32.0
+            let total_gaps = spacing * (channel_count - 1.0); // 32.0
 
-            let available_for_cards = (avail_w - side_margin * 2.0 - total_spacing).max(400.0);
-            let strip_outer_w = (available_for_cards / channel_count).floor();
+            let min_side_margin = 10.0_f32;
+            let max_cards_w = avail_w - min_side_margin * 2.0 - total_gaps;
+            let strip_outer_w = (max_cards_w / channel_count).floor().max(100.0);
+
+            // Total width of all 5 cards + 4 gaps
+            let all_cards_w = strip_outer_w * channel_count + total_gaps;
+            // Exact symmetric left and right margin to guarantee identical margins
+            let side_margin = ((avail_w - all_cards_w) / 2.0).floor().max(0.0);
+
             // Card frame: 6px left margin + 6px right margin + 2*stroke(2.0) = 16px
             let strip_inner_w = (strip_outer_w - 16.0).max(75.0);
 
             // Height budget: ensure bottom dB readout and status bar are 100% visible
             let max_card_h = (avail_h - 36.0).max(280.0);
-            let target_card_h = (max_card_h - 10.0).clamp(280.0, 800.0);
-            let non_fader_h = 210.0;
-            let fader_height = (target_card_h - non_fader_h).clamp(50.0, 360.0);
+            let non_fader_h = 286.0;
+            let fader_height = (max_card_h - non_fader_h - 16.0).clamp(60.0, 360.0);
             let card_inner_h = non_fader_h + fader_height - 10.0;
 
             let audio_ref = self.audio_state.clone();
             let mut newly_selected = self.selected_channel;
 
-            // Direct horizontal container: No ScrollArea to eliminate any horizontal scrollbar
-            ui.horizontal(|ui| {
+            // Strictly align to TOP (Align::Min) to guarantee all channel card tops are 100% level
+            ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
                 ui.spacing_mut().item_spacing.x = spacing;
-                ui.add_space(side_margin);
+                if side_margin > 0.0 {
+                    ui.add_space(side_margin);
+                }
                 for (idx, ch) in self.channels.iter_mut().enumerate() {
                     let is_selected = idx == self.selected_channel;
                     let clicked = render_channel_strip(
